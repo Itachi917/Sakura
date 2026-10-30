@@ -48,10 +48,16 @@ import {
   SPACETOON_NOSTALGIA_QUESTIONS,
   ANIME_EXPERT_EXAM_QUESTIONS,
   AUDIO_GUESS_QUESTIONS,
+  SILHOUETTE_QUESTIONS,
+  EMOJI_RIDDLE_QUESTIONS,
+  LIVE_POLL_QUESTIONS,
   ANIME_AUDIO_PRESETS,
   type ZoomGuessQuestionData,
   type QuizQuestionData,
   type AudioGuessQuestionData,
+  type SilhouetteQuestionData,
+  type EmojiRiddleData,
+  type LivePollData,
   type AudioPreset,
 } from '@/lib/gameData'
 import {
@@ -66,13 +72,16 @@ interface AdminDashboardProps {
 }
 
 const ACTIVITIES: { id: ActivityType; name: string; name_ar: string; emoji: string }[] = [
-  { id: 'whos_that_character', name: "Who's That Character?", name_ar: 'من هذه الشخصية؟', emoji: '🎭' },
-  { id: 'zoom_guess', name: 'Zoom & Guess', name_ar: 'خمن بالزووم (عدسة ساكورا)', emoji: '🔍' },
+  { id: 'whos_that_character', name: "Who's That Character?", name_ar: 'من هذه الشخصية؟', emoji: '❓' },
+  { id: 'zoom_guess', name: 'Zoom & Guess', name_ar: 'زووم وتخمين (عدسة ساكورا)', emoji: '🔍' },
+  { id: 'silhouette_guess', name: "Who's That Silhouette?", name_ar: 'خمن ظل الشخصية', emoji: '👤' },
+  { id: 'emoji_riddle', name: 'Anime Emoji Riddle', name_ar: 'ألغاز إيموجي الأنمي', emoji: '🎭' },
+  { id: 'live_poll', name: 'Live Audience Poll', name_ar: 'استطلاع رأي النادي المباشر', emoji: '📊' },
+  { id: 'audio_guess', name: 'Audio & OST Guess', name_ar: 'خمّن الأوست والصوت 🎵', emoji: '🎵' },
+  { id: 'draw_it_guess_it', name: 'Draw It, Guess It', name_ar: 'ارسم واخمّن', emoji: '🎨' },
   { id: 'spacetoon_nostalgia', name: 'Spacetoon Nostalgia', name_ar: 'نوستالجيا سبيستون', emoji: '📺' },
   { id: 'anime_expert_exam', name: 'Anime Expert Exam', name_ar: 'اختبار خبير الأنمي', emoji: '📚' },
   { id: 'sakura_feud', name: 'Sakura Feud', name_ar: 'فيود ساكورا', emoji: '⚔️' },
-  { id: 'draw_it_guess_it', name: 'Draw It, Guess It', name_ar: 'ارسم واخمّن', emoji: '🎨' },
-  { id: 'audio_guess', name: 'Audio & OST Guess', name_ar: 'خمّن الأوست والصوت 🎵', emoji: '🎵' },
 ]
 
 const RARITIES = [
@@ -88,7 +97,7 @@ export default function AdminDashboard({ locale = 'en' }: AdminDashboardProps) {
   const isRtl = locale === 'ar'
 
   // Navigation tab
-  const [activeTab, setActiveTab] = useState<'sessions' | 'events' | 'stamps' | 'quizzes' | 'zoom_guess' | 'audio_guess'>('sessions')
+  const [activeTab, setActiveTab] = useState<'sessions' | 'events' | 'stamps' | 'quizzes' | 'zoom_guess' | 'audio_guess' | 'silhouette_guess' | 'emoji_riddle' | 'live_poll'>('sessions')
 
   // Global Admin State
   const [loading, setLoading] = useState(true)
@@ -258,6 +267,55 @@ export default function AdminDashboard({ locale = 'en' }: AdminDashboardProps) {
     }
     return ZOOM_GUESS_QUESTIONS
   })
+
+  // 6. Silhouette Guess Questions State
+  const [silhouetteQuestions, setSilhouetteQuestions] = useState<SilhouetteQuestionData[]>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem('sakura_silhouette_questions')
+        if (stored) {
+          const parsed = JSON.parse(stored)
+          if (Array.isArray(parsed) && parsed.length > 0) return parsed
+        }
+      } catch (e) {
+        console.warn('Error reading silhouette questions from localStorage:', e)
+      }
+    }
+    return SILHOUETTE_QUESTIONS
+  })
+
+  // 7. Emoji Riddle Questions State
+  const [emojiQuestions, setEmojiQuestions] = useState<EmojiRiddleData[]>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem('sakura_emoji_questions')
+        if (stored) {
+          const parsed = JSON.parse(stored)
+          if (Array.isArray(parsed) && parsed.length > 0) return parsed
+        }
+      } catch (e) {
+        console.warn('Error reading emoji questions from localStorage:', e)
+      }
+    }
+    return EMOJI_RIDDLE_QUESTIONS
+  })
+
+  // 8. Live Poll Questions State
+  const [pollQuestions, setPollQuestions] = useState<LivePollData[]>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem('sakura_live_poll_questions')
+        if (stored) {
+          const parsed = JSON.parse(stored)
+          if (Array.isArray(parsed) && parsed.length > 0) return parsed
+        }
+      } catch (e) {
+        console.warn('Error reading poll questions from localStorage:', e)
+      }
+    }
+    return LIVE_POLL_QUESTIONS
+  })
+
   const [showZoomModal, setShowZoomModal] = useState(false)
   const [editingZoomId, setEditingZoomId] = useState<string | null>(null)
   const [zoomForm, setZoomForm] = useState({
@@ -417,6 +475,18 @@ export default function AdminDashboard({ locale = 'en' }: AdminDashboardProps) {
         settingsPayload.game_mode = 'zoom_guess'
         settingsPayload.zoom_questions = zoomQuestions
       }
+      if (selectedActivity === 'silhouette_guess') {
+        settingsPayload.game_mode = 'silhouette_guess'
+        settingsPayload.silhouette_questions = silhouetteQuestions
+      }
+      if (selectedActivity === 'emoji_riddle') {
+        settingsPayload.game_mode = 'emoji_riddle'
+        settingsPayload.emoji_questions = emojiQuestions
+      }
+      if (selectedActivity === 'live_poll') {
+        settingsPayload.game_mode = 'live_poll'
+        settingsPayload.poll_questions = pollQuestions
+      }
       if (selectedActivity === 'draw_it_guess_it') {
         settingsPayload.game_mode = 'draw_it_guess_it'
         settingsPayload.round_duration = 60
@@ -442,8 +512,8 @@ export default function AdminDashboard({ locale = 'en' }: AdminDashboardProps) {
         .select()
         .single()
 
-      // If enum not yet migrated in Supabase, fallback cleanly
-      if (error && selectedActivity === 'audio_guess') {
+      // If enum not yet migrated in Supabase, fallback cleanly to whos_that_character with full settingsPayload
+      if (error && ['audio_guess', 'zoom_guess', 'silhouette_guess', 'emoji_riddle', 'live_poll'].includes(selectedActivity)) {
         const fallbackRes = await supabase
           .from('game_sessions')
           .insert({
@@ -451,24 +521,7 @@ export default function AdminDashboard({ locale = 'en' }: AdminDashboardProps) {
             room_pin: pin,
             status: 'lobby',
             host_id: user?.id || dummyAdminId,
-            settings: { question_index: 0, game_mode: 'audio_guess', audio_questions: audioQuestions } as unknown as import('@/types/database').Json,
-            created_at: new Date().toISOString(),
-          })
-          .select()
-          .single()
-        newSess = fallbackRes.data
-        error = fallbackRes.error
-      }
-
-      if (error && selectedActivity === 'zoom_guess') {
-        const fallbackRes = await supabase
-          .from('game_sessions')
-          .insert({
-            activity_type: 'whos_that_character',
-            room_pin: pin,
-            status: 'lobby',
-            host_id: user?.id || dummyAdminId,
-            settings: { question_index: 0, game_mode: 'zoom_guess', zoom_questions: zoomQuestions } as unknown as import('@/types/database').Json,
+            settings: settingsPayload as unknown as import('@/types/database').Json,
             created_at: new Date().toISOString(),
           })
           .select()
@@ -1218,11 +1271,14 @@ export default function AdminDashboard({ locale = 'en' }: AdminDashboardProps) {
       <div className="flex items-center gap-2 border-b border-pink-500/20 pb-2 overflow-x-auto scrollbar-none">
         {[
           { id: 'sessions', label: isRtl ? '🎮 الألعاب الحية' : '🎮 Live Games', count: sessions.length },
-          { id: 'zoom_guess', label: isRtl ? '🔍 خمن بالزووم' : '🔍 Zoom & Guess Questions', count: zoomQuestions.length },
+          { id: 'zoom_guess', label: isRtl ? '🔍 زووم وتخمين' : '🔍 Zoom & Guess', count: zoomQuestions.length },
+          { id: 'silhouette_guess', label: isRtl ? '👤 خمن ظل الشخصية' : '👤 Silhouette Guess', count: silhouetteQuestions.length },
+          { id: 'emoji_riddle', label: isRtl ? '🎭 ألغاز الإيموجي' : '🎭 Emoji Riddles', count: emojiQuestions.length },
+          { id: 'live_poll', label: isRtl ? '📊 استطلاع الرأي' : '📊 Live Polls', count: pollQuestions.length },
+          { id: 'audio_guess', label: isRtl ? '🎵 خمّن الأوست والصوت' : '🎵 Audio & OST Guess', count: audioQuestions.length },
+          { id: 'quizzes', label: isRtl ? '📚 بنك أسئلة الكويز' : '📚 Quizzes & Questions', count: Object.values(customQuestions).reduce((acc, l) => acc + l.length, 0) },
           { id: 'events', label: isRtl ? '📅 إدارة الفعاليات' : '📅 Campus Events', count: events.length },
           { id: 'stamps', label: isRtl ? '🎖️ الشارات والأختام' : '🎖️ Badges & Stamps', count: stamps.length },
-          { id: 'quizzes', label: isRtl ? '📚 بنك أسئلة الكويز' : '📚 Quizzes & Questions', count: Object.values(customQuestions).reduce((acc, l) => acc + l.length, 0) },
-          { id: 'audio_guess', label: isRtl ? '🎵 خمّن الأوست والصوت' : '🎵 Audio & OST Guess', count: audioQuestions.length },
         ].map(tab => (
           <button
             key={tab.id}
@@ -2018,6 +2074,228 @@ export default function AdminDashboard({ locale = 'en' }: AdminDashboardProps) {
                   >
                     <Trash2 size={15} />
                   </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================ */}
+      {/* TAB 6: SILHOUETTE GUESS QUESTIONS MANAGEMENT */}
+      {/* ============================================================ */}
+      {activeTab === 'silhouette_guess' && (
+        <div className="space-y-6 animate-fade-in">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div>
+              <h2 className="text-xl font-black text-white flex items-center gap-2">
+                <span>👤</span>
+                <span>{isRtl ? 'بنك شخصيات خمن الظل (Who\'s That Silhouette)' : 'Silhouette Guess Character Bank'}</span>
+              </h2>
+              <p className="text-xs text-pink-200/70 mt-1">
+                {isRtl
+                  ? 'تظهر الشخصية كظل أسود قاتم وتكشف ملامحها وتفاصيلها تدريجياً مع تقدم الوقت!'
+                  : 'Characters begin as pure silhouettes and progressively reveal brightness/color as time elapses.'}
+              </p>
+            </div>
+
+            <button
+              onClick={() => {
+                if (!confirm(isRtl ? 'استعادة شخصيات الظل الافتراضية؟' : 'Reset to default silhouette characters?')) return
+                sound.playClick()
+                setSilhouetteQuestions(SILHOUETTE_QUESTIONS)
+                try {
+                  localStorage.removeItem('sakura_silhouette_questions')
+                } catch {}
+                showFeedback(isRtl ? 'تمت استعادة القائمة الافتراضية' : 'Default silhouettes restored')
+              }}
+              className="px-3.5 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-pink-300 font-bold text-xs sm:text-sm flex items-center gap-1.5 border border-pink-500/20 transition-colors"
+            >
+              <RefreshCw size={14} />
+              <span>{isRtl ? 'استعادة الافتراضي' : 'Reset Defaults'}</span>
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {silhouetteQuestions.map((q, idx) => (
+              <div
+                key={q.id}
+                className="rounded-3xl bg-black/40 border-2 border-pink-500/20 backdrop-blur-xl p-5 flex flex-col justify-between hover:border-pink-400/40 transition-all shadow-xl space-y-4"
+              >
+                <div className="flex items-center gap-4">
+                  <div className="w-16 h-16 rounded-2xl overflow-hidden border-2 border-pink-400/40 shrink-0 bg-black relative">
+                    <img
+                      src={q.image_url}
+                      alt={q.character_name}
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                  <div className="min-w-0">
+                    <span className="text-[10px] font-mono text-pink-400 font-bold">#{idx + 1}</span>
+                    <h4 className="text-base font-black text-white truncate">
+                      {q.character_name_ar}
+                    </h4>
+                    <p className="text-xs text-pink-200/70 truncate">{q.character_name}</p>
+                    <p className="text-[11px] text-amber-300 font-bold">{q.anime_origin_ar || q.anime_origin}</p>
+                  </div>
+                </div>
+
+                <div className="p-2.5 rounded-xl bg-white/5 border border-pink-500/10 text-xs space-y-1">
+                  <div className="text-[11px] text-pink-300/80">
+                    💡 <span className="font-bold">{isRtl ? 'تلميح:' : 'Hint:'}</span> {isRtl ? q.hint_ar : q.hint}
+                  </div>
+                  <div className="text-[10px] text-pink-200/50">
+                    <span className="font-bold">{isRtl ? 'الأسماء المقبولة:' : 'Aliases:'}</span> {q.aliases.join(', ')}
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between text-xs pt-1 border-t border-pink-500/10">
+                  <span className="font-mono text-amber-300 font-black">{q.base_points} PTS MAX</span>
+                  <span className="text-pink-300/70 font-mono">{q.total_time_seconds}s</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================ */}
+      {/* TAB 7: EMOJI RIDDLE QUESTIONS MANAGEMENT */}
+      {/* ============================================================ */}
+      {activeTab === 'emoji_riddle' && (
+        <div className="space-y-6 animate-fade-in">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div>
+              <h2 className="text-xl font-black text-white flex items-center gap-2">
+                <span>🎭</span>
+                <span>{isRtl ? 'ألغاز إيموجي الأنمي (Anime Emoji Riddles)' : 'Anime Emoji Riddle Bank'}</span>
+              </h2>
+              <p className="text-xs text-pink-200/70 mt-1">
+                {isRtl
+                  ? 'مجموعة إيموجيز تصف حبكة أنمي شهير أو شخصية أيقونية ليتنافس الحضور على فك الشيفرة!'
+                  : 'A combination of emojis representing a famous anime plot or character for contestants to decipher.'}
+              </p>
+            </div>
+
+            <button
+              onClick={() => {
+                if (!confirm(isRtl ? 'استعادة ألغاز الإيموجي الافتراضية؟' : 'Reset to default emoji riddles?')) return
+                sound.playClick()
+                setEmojiQuestions(EMOJI_RIDDLE_QUESTIONS)
+                try {
+                  localStorage.removeItem('sakura_emoji_questions')
+                } catch {}
+                showFeedback(isRtl ? 'تمت استعادة الألغاز الافتراضية' : 'Default emoji riddles restored')
+              }}
+              className="px-3.5 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-pink-300 font-bold text-xs sm:text-sm flex items-center gap-1.5 border border-pink-500/20 transition-colors"
+            >
+              <RefreshCw size={14} />
+              <span>{isRtl ? 'استعادة الافتراضي' : 'Reset Defaults'}</span>
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {emojiQuestions.map((q, idx) => (
+              <div
+                key={q.id}
+                className="rounded-3xl bg-black/40 border-2 border-pink-500/20 backdrop-blur-xl p-5 flex flex-col justify-between hover:border-pink-400/40 transition-all shadow-xl space-y-4"
+              >
+                <div className="text-center py-4 rounded-2xl bg-white/5 border border-pink-500/15">
+                  <span className="text-3xl sm:text-4xl tracking-widest">{q.emojis}</span>
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-mono text-pink-400 font-bold">#{idx + 1}</span>
+                    <span className="text-xs font-mono text-amber-300 font-bold">{q.base_points} PTS</span>
+                  </div>
+                  <h4 className="text-base font-black text-white mt-1">
+                    {q.answer_ar}
+                  </h4>
+                  <p className="text-xs text-pink-200/70">{q.answer}</p>
+                  <p className="text-[11px] text-amber-300 font-bold mt-0.5">{q.anime_origin_ar || q.anime_origin}</p>
+                </div>
+
+                <div className="p-2.5 rounded-xl bg-white/5 border border-pink-500/10 text-xs">
+                  <div className="text-[11px] text-pink-300/80">
+                    💡 <span className="font-bold">{isRtl ? 'تلميح:' : 'Hint:'}</span> {isRtl ? q.hint_ar : q.hint}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================ */}
+      {/* TAB 8: LIVE AUDIENCE POLLS */}
+      {/* ============================================================ */}
+      {activeTab === 'live_poll' && (
+        <div className="space-y-6 animate-fade-in">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div>
+              <h2 className="text-xl font-black text-white flex items-center gap-2">
+                <span>📊</span>
+                <span>{isRtl ? 'استطلاعات رأي النادي المباشرة (Live Audience Polls)' : 'Live Audience Poll Bank'}</span>
+              </h2>
+              <p className="text-xs text-pink-200/70 mt-1">
+                {isRtl
+                  ? 'تصويت تفاعلي حي يشارك فيه جميع الحضور عبر هواتفهم وتظهر النسب المئوية مباشرة على شاشة العرض!'
+                  : 'Live voting where all audience members vote on phones and animated percentages stream onto the projector.'}
+              </p>
+            </div>
+
+            <button
+              onClick={() => {
+                if (!confirm(isRtl ? 'استعادة استطلاعات الرأي الافتراضية؟' : 'Reset to default polls?')) return
+                sound.playClick()
+                setPollQuestions(LIVE_POLL_QUESTIONS)
+                try {
+                  localStorage.removeItem('sakura_live_poll_questions')
+                } catch {}
+                showFeedback(isRtl ? 'تمت استعادة استطلاعات الرأي الافتراضية' : 'Default polls restored')
+              }}
+              className="px-3.5 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-pink-300 font-bold text-xs sm:text-sm flex items-center gap-1.5 border border-pink-500/20 transition-colors"
+            >
+              <RefreshCw size={14} />
+              <span>{isRtl ? 'استعادة الافتراضي' : 'Reset Defaults'}</span>
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {pollQuestions.map((poll, idx) => (
+              <div
+                key={poll.id}
+                className="rounded-3xl bg-black/40 border-2 border-pink-500/20 backdrop-blur-xl p-5 flex flex-col justify-between hover:border-pink-400/40 transition-all shadow-xl space-y-4"
+              >
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-[10px] font-mono text-pink-400 font-bold">#{idx + 1}</span>
+                    <span className="text-xs px-2.5 py-0.5 rounded-full bg-pink-500/20 text-pink-300 font-bold">
+                      {poll.category}
+                    </span>
+                  </div>
+                  <h4 className="text-base font-black text-white">
+                    {isRtl ? poll.question_ar : poll.question}
+                  </h4>
+                </div>
+
+                <div className="space-y-2">
+                  {poll.options.map((opt, oIdx) => (
+                    <div
+                      key={opt.id}
+                      className="p-2.5 rounded-xl bg-white/5 border border-pink-500/10 flex items-center justify-between text-xs"
+                    >
+                      <span className="font-bold text-white">
+                        {['A', 'B', 'C', 'D'][oIdx]}. {isRtl ? opt.text_ar : opt.text}
+                      </span>
+                      {opt.anime_title && (
+                        <span className="text-[10px] text-pink-300 font-mono bg-pink-500/10 px-2 py-0.5 rounded-md">
+                          {opt.anime_title}
+                        </span>
+                      )}
+                    </div>
+                  ))}
                 </div>
               </div>
             ))}

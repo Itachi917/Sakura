@@ -26,8 +26,19 @@ import {
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { sound } from '@/lib/sound'
-import { getQuestionIndex, getParticipantAvatar, prepareDrawItRound, getQuizQuestionsForActivity, getAudioQuestionsForSession } from '@/lib/gameHelpers'
-import type { GameSession, SessionParticipant } from '@/types/database'
+import {
+  getQuestionIndex,
+  getParticipantAvatar,
+  prepareDrawItRound,
+  getQuizQuestionsForActivity,
+  getAudioQuestionsForSession,
+  getZoomQuestionsForSession,
+  getSilhouetteQuestionsForSession,
+  getEmojiRiddleQuestionsForSession,
+  getLivePollQuestionsForSession,
+  prepareGameSwitchSettings,
+} from '@/lib/gameHelpers'
+import type { GameSession, SessionParticipant, ActivityType } from '@/types/database'
 import {
   WHOS_THAT_CHARACTER_QUESTIONS,
   SPACETOON_NOSTALGIA_QUESTIONS,
@@ -35,12 +46,31 @@ import {
   SAKURA_FEUD_ROUNDS,
   ZOOM_GUESS_QUESTIONS,
   AUDIO_GUESS_QUESTIONS,
+  SILHOUETTE_QUESTIONS,
+  EMOJI_RIDDLE_QUESTIONS,
+  LIVE_POLL_QUESTIONS,
   DRAWING_WORDS,
   type QuizQuestionData,
   type FeudQuestionData,
   type ZoomGuessQuestionData,
   type AudioGuessQuestionData,
+  type SilhouetteQuestionData,
+  type EmojiRiddleData,
+  type LivePollData,
 } from '@/lib/gameData'
+
+const ALL_GAMES: { id: ActivityType; name: string; name_ar: string; desc: string; emoji: string }[] = [
+  { id: 'audio_guess', name: 'Audio & OST Guess', name_ar: 'تخمين شارات وأوستات الأنمي', desc: 'استمع وخمّن الأنمي بسرعة', emoji: '🎵' },
+  { id: 'zoom_guess', name: 'Zoom & Guess', name_ar: 'زووم وتخمين (تقريب الصورة)', desc: 'تقريب تدريجي للشخصية كل 10 ثواني', emoji: '🔍' },
+  { id: 'silhouette_guess', name: "Who's That Silhouette?", name_ar: 'خمن ظل الشخصية', desc: 'ظل أسود يكشف ملامحه تدريجياً', emoji: '👤' },
+  { id: 'emoji_riddle', name: 'Anime Emoji Riddle', name_ar: 'ألغاز إيموجي الأنمي', desc: 'رموز تعبيرية تمثل حبكة أو شخصية', emoji: '🎭' },
+  { id: 'live_poll', name: 'Live Audience Poll', name_ar: 'استطلاع رأي النادي المباشر', desc: 'تصويت تفاعلي فوري لجمهور القاعة', emoji: '📊' },
+  { id: 'draw_it_guess_it', name: 'Draw It, Guess It', name_ar: 'ارسم وخمّن', desc: 'أحد اللاعبين يرسم والبقية يخمنون', emoji: '🎨' },
+  { id: 'whos_that_character', name: "Who's That Character?", name_ar: 'من هذه الشخصية؟', desc: 'كويز كلاسيكي بصور الشخصيات', emoji: '❓' },
+  { id: 'spacetoon_nostalgia', name: 'Spacetoon Nostalgia', name_ar: 'نوستالجيا سبيستون', desc: 'ذكريات الطفولة وشباب المستقبل', emoji: '📺' },
+  { id: 'anime_expert_exam', name: 'Anime Expert Exam', name_ar: 'اختبار خبير الأنمي', desc: 'أسئلة حصرية لعشاق الأوتاكو', emoji: '🎓' },
+  { id: 'sakura_feud', name: 'Sakura Feud', name_ar: 'فيود ساكورا (صراع الفرق)', desc: 'فريق ساكورا ضد فريق الكاتانا', emoji: '⚔️' },
+]
 
 interface HostControlRoomProps {
   sessionId: string
@@ -61,7 +91,13 @@ export default function HostControlRoom({ sessionId, locale = 'en' }: HostContro
   const [quizQuestions, setQuizQuestions] = useState<QuizQuestionData[]>([])
   const [zoomQuestions, setZoomQuestions] = useState<ZoomGuessQuestionData[]>(ZOOM_GUESS_QUESTIONS)
   const [audioQuestions, setAudioQuestions] = useState<AudioGuessQuestionData[]>(AUDIO_GUESS_QUESTIONS)
+  const [silhouetteQuestions, setSilhouetteQuestions] = useState<SilhouetteQuestionData[]>(SILHOUETTE_QUESTIONS)
+  const [emojiQuestions, setEmojiQuestions] = useState<EmojiRiddleData[]>(EMOJI_RIDDLE_QUESTIONS)
+  const [pollQuestions, setPollQuestions] = useState<LivePollData[]>(LIVE_POLL_QUESTIONS)
   const [feudRounds, setFeudRounds] = useState<FeudQuestionData[]>(SAKURA_FEUD_ROUNDS)
+
+  // In-room Game Switcher Modal State
+  const [showGameSwitchModal, setShowGameSwitchModal] = useState(false)
 
   // Feud host state
   const [team1Score, setTeam1Score] = useState(0)
@@ -104,29 +140,21 @@ export default function HostControlRoom({ sessionId, locale = 'en' }: HostContro
         setSession(sess)
 
         const isZoomGame = sess.activity_type === 'zoom_guess' || (sess.settings as any)?.game_mode === 'zoom_guess'
+        const isAudioGame = sess.activity_type === 'audio_guess' || (sess.settings as any)?.game_mode === 'audio_guess'
+        const isSilhouetteGame = sess.activity_type === 'silhouette_guess' || (sess.settings as any)?.game_mode === 'silhouette_guess'
+        const isEmojiGame = sess.activity_type === 'emoji_riddle' || (sess.settings as any)?.game_mode === 'emoji_riddle'
+        const isPollGame = sess.activity_type === 'live_poll' || (sess.settings as any)?.game_mode === 'live_poll'
+
         if (isZoomGame) {
-          const customQs = (sess.settings as any)?.zoom_questions
-          if (Array.isArray(customQs) && customQs.length > 0) {
-            setZoomQuestions(customQs)
-          } else {
-            try {
-              const localSaved = localStorage.getItem('sakura_zoom_guess_questions')
-              if (localSaved) {
-                const parsed = JSON.parse(localSaved)
-                if (Array.isArray(parsed) && parsed.length > 0) {
-                  setZoomQuestions(parsed)
-                } else {
-                  setZoomQuestions(ZOOM_GUESS_QUESTIONS)
-                }
-              } else {
-                setZoomQuestions(ZOOM_GUESS_QUESTIONS)
-              }
-            } catch {
-              setZoomQuestions(ZOOM_GUESS_QUESTIONS)
-            }
-          }
-        } else if (sess.activity_type === 'audio_guess' || (sess.settings as any)?.game_mode === 'audio_guess') {
+          setZoomQuestions(getZoomQuestionsForSession(sess.settings as any))
+        } else if (isAudioGame) {
           setAudioQuestions(getAudioQuestionsForSession(sess.settings as any))
+        } else if (isSilhouetteGame) {
+          setSilhouetteQuestions(getSilhouetteQuestionsForSession(sess.settings as any))
+        } else if (isEmojiGame) {
+          setEmojiQuestions(getEmojiRiddleQuestionsForSession(sess.settings as any))
+        } else if (isPollGame) {
+          setPollQuestions(getLivePollQuestionsForSession(sess.settings as any))
         } else if (['whos_that_character', 'spacetoon_nostalgia', 'anime_expert_exam'].includes(sess.activity_type)) {
           setQuizQuestions(getQuizQuestionsForActivity(sess.activity_type, sess.settings as any))
         }
@@ -480,13 +508,85 @@ export default function HostControlRoom({ sessionId, locale = 'en' }: HostContro
     if (!session) return
     sound.playClick()
     const currentSettings = (session.settings as Record<string, unknown>) || {}
-    const currentVal = !!currentSettings.show_questions_on_device
+    const currentVal = currentSettings.show_questions_on_device !== false
     const updatedSettings = { ...currentSettings, show_questions_on_device: !currentVal }
     await supabase
       .from('game_sessions')
       .update({ settings: updatedSettings as unknown as import('@/types/database').Json })
       .eq('id', session.id)
     setSession({ ...session, settings: updatedSettings as unknown as import('@/types/database').Json })
+  }
+
+  // In-Room Game Switcher: Seamlessly switch games without regenerating PIN or kicking participants!
+  const handleSwitchGame = async (targetActivity: ActivityType) => {
+    if (!session) return
+    setActionLoading(true)
+    sound.playClick()
+    try {
+      const { activity_type, settings } = prepareGameSwitchSettings(targetActivity, session.settings as any)
+      
+      // Update DB session
+      let { data, error } = await supabase
+        .from('game_sessions')
+        .update({
+          activity_type: activity_type as any,
+          status: 'lobby',
+          settings: settings as any,
+        })
+        .eq('id', session.id)
+        .select()
+        .single()
+
+      // Fallback if Postgres enum doesn't contain targetActivity
+      if (error) {
+        const fallbackRes = await supabase
+          .from('game_sessions')
+          .update({
+            activity_type: 'whos_that_character',
+            status: 'lobby',
+            settings: settings as any,
+          })
+          .eq('id', session.id)
+          .select()
+          .single()
+        data = fallbackRes.data
+        error = fallbackRes.error
+      }
+
+      if (error) throw error
+
+      if (data) {
+        setSession(data)
+        setShowGameSwitchModal(false)
+        sound.playFanfare()
+
+        // Reload questions locally
+        if (targetActivity === 'zoom_guess') {
+          setZoomQuestions(getZoomQuestionsForSession(settings))
+        } else if (targetActivity === 'audio_guess') {
+          setAudioQuestions(getAudioQuestionsForSession(settings))
+        } else if (targetActivity === 'silhouette_guess') {
+          setSilhouetteQuestions(getSilhouetteQuestionsForSession(settings))
+        } else if (targetActivity === 'emoji_riddle') {
+          setEmojiQuestions(getEmojiRiddleQuestionsForSession(settings))
+        } else if (targetActivity === 'live_poll') {
+          setPollQuestions(getLivePollQuestionsForSession(settings))
+        } else if (['whos_that_character', 'spacetoon_nostalgia', 'anime_expert_exam'].includes(targetActivity)) {
+          setQuizQuestions(getQuizQuestionsForActivity(targetActivity, settings))
+        }
+
+        // Broadcast to projector and players
+        await supabase.channel(`projector_session_${session.id}`).send({
+          type: 'broadcast',
+          event: 'game_switched',
+          payload: { activity_type: data.activity_type, settings: data.settings },
+        })
+      }
+    } catch (err) {
+      console.error('Failed to switch game:', err)
+    } finally {
+      setActionLoading(false)
+    }
   }
 
   if (loading || !session) {
@@ -500,19 +600,30 @@ export default function HostControlRoom({ sessionId, locale = 'en' }: HostContro
   const currentIndex = getQuestionIndex(session)
   const isZoomGame = session.activity_type === 'zoom_guess' || (session.settings as any)?.game_mode === 'zoom_guess'
   const isAudioGame = session.activity_type === 'audio_guess' || (session.settings as any)?.game_mode === 'audio_guess'
+  const isSilhouetteGame = session.activity_type === 'silhouette_guess' || (session.settings as any)?.game_mode === 'silhouette_guess'
+  const isEmojiGame = session.activity_type === 'emoji_riddle' || (session.settings as any)?.game_mode === 'emoji_riddle'
+  const isPollGame = session.activity_type === 'live_poll' || (session.settings as any)?.game_mode === 'live_poll'
+
   const totalQuestions =
     (isZoomGame ? zoomQuestions.length : 0) ||
     (isAudioGame ? audioQuestions.length : 0) ||
+    (isSilhouetteGame ? silhouetteQuestions.length : 0) ||
+    (isEmojiGame ? emojiQuestions.length : 0) ||
+    (isPollGame ? pollQuestions.length : 0) ||
     (session?.activity_type === 'draw_it_guess_it'
       ? Math.min(15, Math.max(DRAWING_WORDS.length, participants.length || 5))
       : 0) ||
     quizQuestions.length ||
     feudRounds.length ||
     5
+
   const currentQuizQ = quizQuestions[currentIndex]
   const currentFeudQ = feudRounds[currentIndex]
   const currentZoomQ = isZoomGame ? (zoomQuestions[currentIndex] || zoomQuestions[0]) : null
   const currentAudioQ = isAudioGame ? (audioQuestions[currentIndex] || audioQuestions[0]) : null
+  const currentSilhouetteQ = isSilhouetteGame ? (silhouetteQuestions[currentIndex] || silhouetteQuestions[0]) : null
+  const currentEmojiQ = isEmojiGame ? (emojiQuestions[currentIndex] || emojiQuestions[0]) : null
+  const currentPollQ = isPollGame ? (pollQuestions[currentIndex] || pollQuestions[0]) : null
 
   const team1Members = participants.filter(p => participantTeams[p.id] === 'team1' || !participantTeams[p.id])
   const team2Members = participants.filter(p => participantTeams[p.id] === 'team2')
@@ -531,8 +642,17 @@ export default function HostControlRoom({ sessionId, locale = 'en' }: HostContro
           <div className="flex items-center gap-2">
             <span className="font-extrabold text-lg text-white">SAKURA HOST COCKPIT</span>
             <span className="px-2.5 py-0.5 rounded-full text-xs font-bold uppercase bg-pink-500/20 text-pink-300 border border-pink-400/25">
-              {session.activity_type.replace(/_/g, ' ')}
+              {((session.settings as any)?.game_mode || session.activity_type).replace(/_/g, ' ')}
             </span>
+            <button
+              type="button"
+              onClick={() => setShowGameSwitchModal(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-600/30 hover:bg-purple-600/50 text-purple-200 border border-purple-400/30 text-xs font-bold transition-all shadow-sm active:scale-95"
+              title={isRtl ? 'تبديل اللعبة الحالية فوراً دون تغيير رمز PIN' : 'Switch active game instantly without regenerating PIN'}
+            >
+              <RotateCcw size={12} className="text-purple-300" />
+              <span>{isRtl ? 'تبديل اللعبة 🔄' : 'Switch Game 🔄'}</span>
+            </button>
           </div>
         </div>
 
@@ -581,36 +701,125 @@ export default function HostControlRoom({ sessionId, locale = 'en' }: HostContro
             </div>
           </div>
 
-          {/* Device Questions Display Mode Toggle */}
-          <div className="flex items-center justify-between p-3.5 rounded-2xl bg-black/40 border border-pink-500/20 backdrop-blur-md text-xs">
+          {/* Question Display Mode: Projector Only vs Player Phones */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between p-3.5 rounded-2xl bg-black/40 border border-pink-500/20 backdrop-blur-md text-xs gap-3">
             <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-xl bg-pink-500/20 border border-pink-400/30 flex items-center justify-center text-sm">
-                📱
+              <div className="w-8 h-8 rounded-xl bg-pink-500/20 border border-pink-400/30 flex items-center justify-center text-sm shrink-0">
+                {(session.settings as Record<string, unknown>)?.show_questions_on_device !== false ? '📱' : '📽️'}
               </div>
               <div>
                 <span className="font-bold text-white block">
-                  {isRtl ? 'عرض تفاصيل الأسئلة على هواتف اللاعبين' : 'Show Questions on Player Devices'}
+                  {isRtl ? 'مكان عرض الأسئلة والوسائط للجمهور' : 'Question & Clue Display Target'}
                 </span>
                 <span className="text-[10px] text-pink-200/60">
-                  {isRtl
-                    ? 'يسمح للاعبين برؤية نص السؤال والصورة التوضيحية على أجهزتهم بدلاً من الاعتماد فقط على شاشة البروجكتر'
-                    : 'Enables players to see question text & clue media directly on their phones'}
+                  {(session.settings as Record<string, unknown>)?.show_questions_on_device !== false
+                    ? (isRtl ? 'معروضة على هواتف اللاعبين وشاشة البروجكتر معاً' : 'Questions show on player devices & projector')
+                    : (isRtl ? 'معروضة على شاشة البروجكتر فقط (اللاعبون يستمعون/يشاهدون ويجيبون)' : 'Projector screen only (Player devices are controllers)')}
                 </span>
               </div>
             </div>
-            <button
-              type="button"
-              onClick={toggleShowQuestionsOnDevice}
-              className={`px-3.5 py-1.5 rounded-xl font-black text-xs transition-all ${
-                (session.settings as Record<string, unknown>)?.show_questions_on_device
-                  ? 'bg-pink-600 hover:bg-pink-500 text-white shadow-md shadow-pink-600/30'
-                  : 'bg-white/10 hover:bg-white/20 text-pink-300'
-              }`}
-            >
-              {(session.settings as Record<string, unknown>)?.show_questions_on_device
-                ? (isRtl ? 'مُفعّل ✓' : 'Enabled ✓')
-                : (isRtl ? 'معطّل' : 'Disabled')}
-            </button>
+
+            <div className="flex items-center bg-white/5 p-1 rounded-xl border border-pink-500/20 gap-1 shrink-0">
+              <button
+                type="button"
+                onClick={() => {
+                  if ((session.settings as Record<string, unknown>)?.show_questions_on_device !== false) {
+                    toggleShowQuestionsOnDevice()
+                  }
+                }}
+                className={`px-3 py-1.5 rounded-lg font-bold text-xs transition-all ${
+                  (session.settings as Record<string, unknown>)?.show_questions_on_device === false
+                    ? 'bg-pink-600 text-white shadow-md'
+                    : 'text-pink-300/60 hover:text-white'
+                }`}
+              >
+                📽️ {isRtl ? 'البروجكتر فقط' : 'Projector Only'}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if ((session.settings as Record<string, unknown>)?.show_questions_on_device === false) {
+                    toggleShowQuestionsOnDevice()
+                  }
+                }}
+                className={`px-3 py-1.5 rounded-lg font-bold text-xs transition-all ${
+                  (session.settings as Record<string, unknown>)?.show_questions_on_device !== false
+                    ? 'bg-pink-600 text-white shadow-md'
+                    : 'text-pink-300/60 hover:text-white'
+                }`}
+              >
+                📱 {isRtl ? 'على الهواتف' : 'On Phones'}
+              </button>
+            </div>
+          </div>
+
+          {/* INTERACTIVE HOST SOUNDBOARD */}
+          <div className="p-4 rounded-2xl bg-black/40 border border-pink-500/20 backdrop-blur-md space-y-2.5">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-black uppercase text-pink-300 tracking-wider flex items-center gap-1.5">
+                <Volume2 size={14} className="text-pink-400" />
+                <span>{isRtl ? 'المؤثرات الصوتية الحية (الساوندبورد)' : 'Interactive Host Soundboard'}</span>
+              </span>
+              <span className="text-[10px] text-pink-200/50">
+                {isRtl ? 'صوت مباشر لتحميس الأجواء' : 'Live sound triggers'}
+              </span>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => sound.playHeartbeat()}
+                className="px-3 py-1.5 rounded-xl bg-pink-950/40 hover:bg-pink-900/60 border border-pink-500/30 text-pink-200 text-xs font-bold flex items-center gap-1.5 active:scale-95 transition-all"
+                title="Heartbeat"
+              >
+                <span>💓</span>
+                <span>{isRtl ? 'نبضات القلب' : 'Heartbeat'}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => sound.playDrumroll()}
+                className="px-3 py-1.5 rounded-xl bg-amber-950/40 hover:bg-amber-900/60 border border-amber-500/30 text-amber-200 text-xs font-bold flex items-center gap-1.5 active:scale-95 transition-all"
+                title="Drumroll"
+              >
+                <span>🥁</span>
+                <span>{isRtl ? 'طبول الترقب' : 'Drumroll'}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => sound.playApplause()}
+                className="px-3 py-1.5 rounded-xl bg-purple-950/40 hover:bg-purple-900/60 border border-purple-500/30 text-purple-200 text-xs font-bold flex items-center gap-1.5 active:scale-95 transition-all"
+                title="Applause"
+              >
+                <span>👏</span>
+                <span>{isRtl ? 'تصفيق الجمهور' : 'Applause'}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => sound.playFanfare()}
+                className="px-3 py-1.5 rounded-xl bg-emerald-950/40 hover:bg-emerald-900/60 border border-emerald-500/30 text-emerald-200 text-xs font-bold flex items-center gap-1.5 active:scale-95 transition-all"
+                title="Fanfare"
+              >
+                <span>🎺</span>
+                <span>{isRtl ? 'أبواق الفوز' : 'Fanfare'}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => sound.playWrong()}
+                className="px-3 py-1.5 rounded-xl bg-red-950/40 hover:bg-red-900/60 border border-red-500/30 text-red-200 text-xs font-bold flex items-center gap-1.5 active:scale-95 transition-all"
+                title="Buzzer"
+              >
+                <span>❌</span>
+                <span>{isRtl ? 'إجابة خاطئة' : 'Buzzer'}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => sound.playCorrect()}
+                className="px-3 py-1.5 rounded-xl bg-teal-950/40 hover:bg-teal-900/60 border border-teal-500/30 text-teal-200 text-xs font-bold flex items-center gap-1.5 active:scale-95 transition-all"
+                title="Correct"
+              >
+                <span>✨</span>
+                <span>{isRtl ? 'إجابة صحيحة' : 'Ding'}</span>
+              </button>
+            </div>
           </div>
 
           {/* SAKURA FEUD COMPLETE CONTROL ENGINE */}
@@ -965,8 +1174,8 @@ export default function HostControlRoom({ sessionId, locale = 'en' }: HostContro
             )}
           </div>
 
-          {/* QUESTION PREVIEW (For Quiz modes) */}
-          {currentQuizQ && !isZoomGame && (
+          {/* QUESTION PREVIEW (For Quiz modes only) */}
+          {currentQuizQ && !isZoomGame && !isAudioGame && !isSilhouetteGame && !isEmojiGame && !isPollGame && (
             <div className="p-5 rounded-2xl bg-black/30 border border-pink-500/15">
               <span className="text-xs uppercase tracking-wider text-pink-300/70 font-bold block mb-2">
                 {isRtl ? 'معاينة السؤال الحالي للمنظم:' : 'Host Question Preview:'}
@@ -1043,6 +1252,7 @@ export default function HostControlRoom({ sessionId, locale = 'en' }: HostContro
             </div>
           )}
 
+          {/* AUDIO & OST GUESS HOST PREVIEW CARD */}
           {isAudioGame && currentAudioQ && (
             <div className="p-5 rounded-2xl bg-[#1d0b2e] border-2 border-pink-500/30 space-y-4">
               <div className="flex items-center justify-between pb-3 border-b border-pink-500/20">
@@ -1082,6 +1292,133 @@ export default function HostControlRoom({ sessionId, locale = 'en' }: HostContro
                   <span>{isRtl ? 'كشف الإجابة للجمهور 👁️' : 'Reveal Answer 👁️'}</span>
                 </button>
               )}
+            </div>
+          )}
+
+          {/* SILHOUETTE GUESS HOST PREVIEW CARD */}
+          {isSilhouetteGame && currentSilhouetteQ && (
+            <div className="p-5 rounded-2xl bg-[#1d0b2e] border-2 border-pink-500/30 space-y-4">
+              <div className="flex items-center justify-between pb-3 border-b border-pink-500/20">
+                <span className="text-xs font-black uppercase text-pink-300 tracking-wider flex items-center gap-1.5">
+                  <span>👤</span>
+                  <span>{isRtl ? 'معلومات ظل الشخصية (للمنظم)' : 'Silhouette Intel (Host Only)'}</span>
+                </span>
+                <span className="text-xs font-mono font-bold text-amber-300">
+                  {currentSilhouetteQ.base_points} PTS MAX
+                </span>
+              </div>
+
+              <div className="flex items-center gap-4">
+                <div className="w-20 h-20 rounded-2xl overflow-hidden border-2 border-pink-400/50 shrink-0 bg-black">
+                  <img
+                    src={currentSilhouetteQ.image_url}
+                    alt="Silhouette Character"
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+                <div>
+                  <h4 className="text-xl font-black text-white">
+                    {currentSilhouetteQ.character_name_ar} ({currentSilhouetteQ.character_name})
+                  </h4>
+                  <p className="text-xs text-pink-200/70 mt-0.5 font-bold">
+                    {isRtl ? `أنمي: ${currentSilhouetteQ.anime_origin_ar}` : `Anime: ${currentSilhouetteQ.anime_origin}`}
+                  </p>
+                  <p className="text-[11px] text-pink-300/80 mt-1">
+                    💡 {isRtl ? currentSilhouetteQ.hint_ar : currentSilhouetteQ.hint}
+                  </p>
+                </div>
+              </div>
+
+              <div className="p-2.5 rounded-xl bg-black/40 border border-white/5 text-xs text-pink-200/80">
+                <span className="font-bold text-pink-300">{isRtl ? 'الأسماء المقبولة:' : 'Accepted Names:'} </span>
+                <span>{[currentSilhouetteQ.character_name, currentSilhouetteQ.character_name_ar, ...currentSilhouetteQ.aliases].join(' • ')}</span>
+              </div>
+
+              {session.status === 'question_active' && (
+                <button
+                  onClick={() => updateSessionStatus('answer_reveal')}
+                  disabled={actionLoading}
+                  className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-500 hover:to-purple-500 text-white font-black text-sm shadow-lg flex items-center justify-center gap-2"
+                >
+                  <Eye size={16} />
+                  <span>{isRtl ? 'كشف الشخصية والظل للجمهور 👁️' : 'Reveal Silhouette & Identity 👁️'}</span>
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* EMOJI RIDDLE HOST PREVIEW CARD */}
+          {isEmojiGame && currentEmojiQ && (
+            <div className="p-5 rounded-2xl bg-[#1d0b2e] border-2 border-pink-500/30 space-y-4">
+              <div className="flex items-center justify-between pb-3 border-b border-pink-500/20">
+                <span className="text-xs font-black uppercase text-pink-300 tracking-wider flex items-center gap-1.5">
+                  <span>🎭</span>
+                  <span>{isRtl ? 'معلومات لغز الإيموجي (للمنظم)' : 'Emoji Riddle Intel (Host Only)'}</span>
+                </span>
+                <span className="text-xs font-mono font-bold text-amber-300">
+                  {currentEmojiQ.base_points} PTS MAX
+                </span>
+              </div>
+
+              <div className="text-center py-3 bg-black/40 rounded-2xl border border-pink-500/20">
+                <span className="text-4xl tracking-widest">{currentEmojiQ.emojis}</span>
+              </div>
+
+              <div>
+                <h4 className="text-xl font-black text-white">
+                  {currentEmojiQ.answer_ar} ({currentEmojiQ.answer})
+                </h4>
+                <p className="text-xs text-pink-200/70 mt-0.5 font-bold">
+                  {isRtl ? `أنمي: ${currentEmojiQ.anime_origin_ar}` : `Anime: ${currentEmojiQ.anime_origin}`}
+                </p>
+                <p className="text-[11px] text-pink-300/80 mt-1">
+                  💡 {isRtl ? currentEmojiQ.hint_ar : currentEmojiQ.hint}
+                </p>
+              </div>
+
+              <div className="p-2.5 rounded-xl bg-black/40 border border-white/5 text-xs text-pink-200/80">
+                <span className="font-bold text-pink-300">{isRtl ? 'الأسماء المقبولة:' : 'Accepted Names:'} </span>
+                <span>{[currentEmojiQ.answer, currentEmojiQ.answer_ar, ...currentEmojiQ.aliases].join(' • ')}</span>
+              </div>
+
+              {session.status === 'question_active' && (
+                <button
+                  onClick={() => updateSessionStatus('answer_reveal')}
+                  disabled={actionLoading}
+                  className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-500 hover:to-purple-500 text-white font-black text-sm shadow-lg flex items-center justify-center gap-2"
+                >
+                  <Eye size={16} />
+                  <span>{isRtl ? 'كشف حل اللغز للجمهور 👁️' : 'Reveal Riddle Answer 👁️'}</span>
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* LIVE AUDIENCE POLL HOST PREVIEW CARD */}
+          {isPollGame && currentPollQ && (
+            <div className="p-5 rounded-2xl bg-[#1d0b2e] border-2 border-pink-500/30 space-y-4">
+              <div className="flex items-center justify-between pb-3 border-b border-pink-500/20">
+                <span className="text-xs font-black uppercase text-pink-300 tracking-wider flex items-center gap-1.5">
+                  <span>📊</span>
+                  <span>{isRtl ? 'استطلاع الرأي المباشر للجمهور' : 'Live Audience Poll Intel'}</span>
+                </span>
+                <span className="text-xs px-2.5 py-0.5 rounded-full bg-pink-500/20 text-pink-300 font-bold">
+                  {currentPollQ.category}
+                </span>
+              </div>
+
+              <h4 className="text-lg font-black text-white">
+                {isRtl ? currentPollQ.question_ar : currentPollQ.question}
+              </h4>
+
+              <div className="space-y-2">
+                {currentPollQ.options.map(opt => (
+                  <div key={opt.id} className="p-2.5 rounded-xl bg-white/5 border border-pink-500/20 flex items-center justify-between text-xs">
+                    <span className="font-bold text-white">{isRtl ? opt.text_ar : opt.text}</span>
+                    <span className="text-pink-300 font-mono text-[11px]">{opt.anime_title || ''}</span>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
         </div>
@@ -1154,6 +1491,71 @@ export default function HostControlRoom({ sessionId, locale = 'en' }: HostContro
           </div>
         </div>
       </main>
+
+      {/* IN-ROOM GAME SWITCHER MODAL */}
+      {showGameSwitchModal && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-[#190825] border-2 border-pink-500/40 rounded-3xl max-w-lg w-full p-6 shadow-2xl space-y-4 animate-scale-up">
+            <div className="flex items-center justify-between pb-3 border-b border-pink-500/20">
+              <div>
+                <h3 className="text-lg font-black text-white flex items-center gap-2">
+                  <span>🔄</span>
+                  <span>{isRtl ? 'تبديل الفعالية الحالية للغرفة' : 'Switch Active Game Mode'}</span>
+                </h3>
+                <p className="text-xs text-pink-200/60 mt-0.5">
+                  {isRtl
+                    ? 'سيتم تبديل الفعالية فوراً لجميع اللاعبين وشاشة العرض دون تغيير رمز PIN!'
+                    : 'Switches the game instantly for all players & projector without changing PIN!'}
+                </p>
+              </div>
+              <button
+                onClick={() => setShowGameSwitchModal(false)}
+                className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-pink-300 flex items-center justify-center text-sm font-bold"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-[60vh] overflow-y-auto pr-1 scrollbar-none">
+              {ALL_GAMES.map(g => {
+                const isActive = (session.settings as any)?.game_mode === g.id || session.activity_type === g.id
+                return (
+                  <button
+                    key={g.id}
+                    onClick={() => handleSwitchGame(g.id)}
+                    disabled={actionLoading}
+                    className={`p-3 rounded-2xl border text-start flex items-center gap-3 transition-all ${
+                      isActive
+                        ? 'bg-pink-600/30 border-pink-400 text-white shadow-lg ring-1 ring-pink-400'
+                        : 'bg-white/5 border-pink-500/15 text-pink-200/80 hover:bg-white/10 hover:border-pink-400/40'
+                    }`}
+                  >
+                    <span className="text-2xl shrink-0">{g.emoji}</span>
+                    <div className="min-w-0">
+                      <div className="text-xs font-black text-white truncate">
+                        {isRtl ? g.name_ar : g.name}
+                      </div>
+                      <div className="text-[10px] text-pink-300/60 truncate">
+                        {g.desc}
+                      </div>
+                    </div>
+                  </button>
+                )
+              })}
+            </div>
+
+            <div className="pt-2 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setShowGameSwitchModal(false)}
+                className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-pink-200 text-xs font-bold transition-colors"
+              >
+                {isRtl ? 'إلغاء' : 'Cancel'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

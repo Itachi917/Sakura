@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { Cherry, Sparkles, Trophy, Loader2, AlertCircle } from 'lucide-react'
+import { Cherry, Sparkles, Trophy, Loader2, AlertCircle, Award } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { sound } from '@/lib/sound'
 import type { GameSession, SessionParticipant } from '@/types/database'
@@ -11,17 +11,36 @@ import PlayerFeudView from './PlayerFeudView'
 import PlayerDrawView from './PlayerDrawView'
 import PlayerZoomGuessView from './PlayerZoomGuessView'
 import PlayerAudioGuessView from './PlayerAudioGuessView'
+import PlayerSilhouetteView from './PlayerSilhouetteView'
+import PlayerEmojiRiddleView from './PlayerEmojiRiddleView'
+import PlayerLivePollView from './PlayerLivePollView'
+import SakuraCertificateModal from '../certificate/SakuraCertificateModal'
 import {
   WHOS_THAT_CHARACTER_QUESTIONS,
   SPACETOON_NOSTALGIA_QUESTIONS,
   ANIME_EXPERT_EXAM_QUESTIONS,
   ZOOM_GUESS_QUESTIONS,
   AUDIO_GUESS_QUESTIONS,
+  SILHOUETTE_QUESTIONS,
+  EMOJI_RIDDLE_QUESTIONS,
+  LIVE_POLL_QUESTIONS,
   type QuizQuestionData,
   type ZoomGuessQuestionData,
   type AudioGuessQuestionData,
+  type SilhouetteQuestionData,
+  type EmojiRiddleData,
+  type LivePollData,
 } from '@/lib/gameData'
-import { getParticipantAvatar, getQuizQuestionsForActivity, getAudioQuestionsForSession, getQuestionIndex } from '@/lib/gameHelpers'
+import {
+  getParticipantAvatar,
+  getQuizQuestionsForActivity,
+  getAudioQuestionsForSession,
+  getZoomQuestionsForSession,
+  getSilhouetteQuestionsForSession,
+  getEmojiRiddleQuestionsForSession,
+  getLivePollQuestionsForSession,
+  getQuestionIndex,
+} from '@/lib/gameHelpers'
 
 interface PlayerContainerProps {
   sessionId: string
@@ -38,9 +57,34 @@ export default function PlayerContainer({ sessionId, locale = 'en' }: PlayerCont
   const [allParticipants, setAllParticipants] = useState<SessionParticipant[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [showCertificateModal, setShowCertificateModal] = useState(false)
+
   const [quizQuestions, setQuizQuestions] = useState<QuizQuestionData[]>([])
   const [zoomQuestions, setZoomQuestions] = useState<ZoomGuessQuestionData[]>(ZOOM_GUESS_QUESTIONS)
   const [audioQuestions, setAudioQuestions] = useState<AudioGuessQuestionData[]>(AUDIO_GUESS_QUESTIONS)
+  const [silhouetteQuestions, setSilhouetteQuestions] = useState<SilhouetteQuestionData[]>(SILHOUETTE_QUESTIONS)
+  const [emojiQuestions, setEmojiQuestions] = useState<EmojiRiddleData[]>(EMOJI_RIDDLE_QUESTIONS)
+  const [pollQuestions, setPollQuestions] = useState<LivePollData[]>(LIVE_POLL_QUESTIONS)
+
+  // Question reloader helper
+  const reloadQuestions = (sess: GameSession) => {
+    const settings = sess.settings as Record<string, unknown> | null
+    const mode = (settings as any)?.game_mode || sess.activity_type
+
+    if (mode === 'zoom_guess') {
+      setZoomQuestions(getZoomQuestionsForSession(settings))
+    } else if (mode === 'audio_guess') {
+      setAudioQuestions(getAudioQuestionsForSession(settings))
+    } else if (mode === 'silhouette_guess') {
+      setSilhouetteQuestions(getSilhouetteQuestionsForSession(settings))
+    } else if (mode === 'emoji_riddle') {
+      setEmojiQuestions(getEmojiRiddleQuestionsForSession(settings))
+    } else if (mode === 'live_poll') {
+      setPollQuestions(getLivePollQuestionsForSession(settings))
+    } else if (['whos_that_character', 'spacetoon_nostalgia', 'anime_expert_exam'].includes(mode)) {
+      setQuizQuestions(getQuizQuestionsForActivity(mode, settings))
+    }
+  }
 
   useEffect(() => {
     async function initPlayer() {
@@ -63,35 +107,7 @@ export default function PlayerContainer({ sessionId, locale = 'en' }: PlayerCont
         }
 
         setSession(sessData)
-
-        // Select questions
-        const isZoomGame = sessData.activity_type === 'zoom_guess' || (sessData.settings as any)?.game_mode === 'zoom_guess'
-        if (isZoomGame) {
-          const customQs = (sessData.settings as any)?.zoom_questions
-          if (Array.isArray(customQs) && customQs.length > 0) {
-            setZoomQuestions(customQs)
-          } else {
-            try {
-              const localSaved = localStorage.getItem('sakura_zoom_guess_questions')
-              if (localSaved) {
-                const parsed = JSON.parse(localSaved)
-                if (Array.isArray(parsed) && parsed.length > 0) {
-                  setZoomQuestions(parsed)
-                } else {
-                  setZoomQuestions(ZOOM_GUESS_QUESTIONS)
-                }
-              } else {
-                setZoomQuestions(ZOOM_GUESS_QUESTIONS)
-              }
-            } catch {
-              setZoomQuestions(ZOOM_GUESS_QUESTIONS)
-            }
-          }
-        } else if (sessData.activity_type === 'audio_guess' || (sessData.settings as any)?.game_mode === 'audio_guess') {
-          setAudioQuestions(getAudioQuestionsForSession(sessData.settings as any))
-        } else if (['whos_that_character', 'spacetoon_nostalgia', 'anime_expert_exam'].includes(sessData.activity_type)) {
-          setQuizQuestions(getQuizQuestionsForActivity(sessData.activity_type, sessData.settings as any))
-        }
+        reloadQuestions(sessData)
 
         // 2. Identify Current Participant
         // Check local storage or auth
@@ -169,10 +185,7 @@ export default function PlayerContainer({ sessionId, locale = 'en' }: PlayerCont
         payload => {
           if (payload.new) {
             const updated = payload.new as GameSession
-            const sessionZoomQs = (updated.settings as any)?.zoom_questions
-            if (Array.isArray(sessionZoomQs) && sessionZoomQs.length > 0) {
-              setZoomQuestions(sessionZoomQs)
-            }
+            reloadQuestions(updated)
             setSession(prev => {
               if (prev && prev.status !== updated.status) {
                 if (updated.status === 'question_active') {
@@ -250,6 +263,15 @@ export default function PlayerContainer({ sessionId, locale = 'en' }: PlayerCont
   const behindParticipant = myIndex !== -1 && myIndex < sorted.length - 1 ? sorted[myIndex + 1] : null
   const pointsToAhead = aheadParticipant ? Math.max(0, (aheadParticipant.score || 0) - (participant.score || 0)) : 0
   const currentIdx = getQuestionIndex(session)
+
+  const isZoom = session.activity_type === 'zoom_guess' || (session.settings as any)?.game_mode === 'zoom_guess'
+  const isAudio = session.activity_type === 'audio_guess' || (session.settings as any)?.game_mode === 'audio_guess'
+  const isSilhouette = session.activity_type === 'silhouette_guess' || (session.settings as any)?.game_mode === 'silhouette_guess'
+  const isEmoji = session.activity_type === 'emoji_riddle' || (session.settings as any)?.game_mode === 'emoji_riddle'
+  const isLivePoll = session.activity_type === 'live_poll' || (session.settings as any)?.game_mode === 'live_poll'
+  const isDrawIt = session.activity_type === 'draw_it_guess_it' || (session.settings as any)?.game_mode === 'draw_it_guess_it'
+  const isFeud = session.activity_type === 'sakura_feud' || (session.settings as any)?.game_mode === 'sakura_feud'
+  const isQuiz = !isZoom && !isAudio && !isSilhouette && !isEmoji && !isLivePoll && !isDrawIt && !isFeud && ['whos_that_character', 'spacetoon_nostalgia', 'anime_expert_exam'].includes(session.activity_type)
 
   return (
     <div className="min-h-screen text-white flex flex-col justify-between p-4 sm:p-6 relative select-none">
@@ -384,36 +406,79 @@ export default function PlayerContainer({ sessionId, locale = 'en' }: PlayerCont
           </div>
         )}
 
+        {/* SILHOUETTE GUESS MODE */}
+        {isSilhouette &&
+          ['question_active', 'answer_collection_ended', 'answer_reveal', 'round_results'].includes(session.status) &&
+          silhouetteQuestions[currentIdx] && (
+            <PlayerSilhouetteView
+              session={session}
+              participant={participant}
+              currentQuestion={silhouetteQuestions[currentIdx]}
+              questionIndex={currentIdx}
+              totalQuestions={silhouetteQuestions.length}
+              locale={locale}
+            />
+          )}
+
+        {/* EMOJI RIDDLE MODE */}
+        {isEmoji &&
+          ['question_active', 'answer_collection_ended', 'answer_reveal', 'round_results'].includes(session.status) &&
+          emojiQuestions[currentIdx] && (
+            <PlayerEmojiRiddleView
+              session={session}
+              participant={participant}
+              currentQuestion={emojiQuestions[currentIdx]}
+              questionIndex={currentIdx}
+              totalQuestions={emojiQuestions.length}
+              locale={locale}
+            />
+          )}
+
+        {/* LIVE POLL MODE */}
+        {isLivePoll &&
+          ['question_active', 'answer_collection_ended', 'answer_reveal', 'round_results'].includes(session.status) &&
+          pollQuestions[currentIdx] && (
+            <PlayerLivePollView
+              session={session}
+              participant={participant}
+              currentQuestion={pollQuestions[currentIdx]}
+              questionIndex={currentIdx}
+              totalQuestions={pollQuestions.length}
+              locale={locale}
+            />
+          )}
+
+        {/* AUDIO GUESS MODE */}
+        {isAudio &&
+          ['question_active', 'answer_collection_ended', 'answer_reveal', 'round_results'].includes(session.status) &&
+          audioQuestions[currentIdx] && (
+            <PlayerAudioGuessView
+              session={session}
+              participant={participant}
+              currentQuestion={audioQuestions[currentIdx]}
+              questionIndex={currentIdx}
+              totalQuestions={audioQuestions.length}
+              locale={locale}
+            />
+          )}
+
         {/* ZOOM & GUESS MODE */}
-        {(session.activity_type === 'zoom_guess' || (session.settings as any)?.game_mode === 'zoom_guess') &&
-          ['question_active', 'answer_collection_ended', 'answer_reveal', 'round_results'].includes(
-            session.status
-          ) && (
+        {isZoom &&
+          ['question_active', 'answer_collection_ended', 'answer_reveal', 'round_results'].includes(session.status) &&
+          zoomQuestions[currentIdx] && (
             <PlayerZoomGuessView
               session={session}
               participant={participant}
-              currentQuestion={
-                zoomQuestions[
-                  Math.min(
-                    zoomQuestions.length - 1,
-                    (session.settings as any)?.question_index || 0
-                  )
-                ] || zoomQuestions[0]
-              }
-              questionIndex={(session.settings as any)?.question_index || 0}
+              currentQuestion={zoomQuestions[currentIdx]}
+              questionIndex={currentIdx}
               totalQuestions={zoomQuestions.length}
               locale={locale}
             />
           )}
 
         {/* QUIZ ANIME MODES */}
-        {['whos_that_character', 'spacetoon_nostalgia', 'anime_expert_exam'].includes(
-          session.activity_type
-        ) &&
-          !((session.settings as any)?.game_mode === 'zoom_guess') &&
-          ['question_active', 'answer_collection_ended', 'answer_reveal', 'round_results'].includes(
-            session.status
-          ) && (
+        {isQuiz &&
+          ['question_active', 'answer_collection_ended', 'answer_reveal', 'round_results'].includes(session.status) && (
             <PlayerQuizView
               session={session}
               participant={participant}
@@ -423,10 +488,8 @@ export default function PlayerContainer({ sessionId, locale = 'en' }: PlayerCont
           )}
 
         {/* SAKURA FEUD MODE */}
-        {session.activity_type === 'sakura_feud' &&
-          ['question_active', 'answer_collection_ended', 'answer_reveal', 'round_results'].includes(
-            session.status
-          ) && (
+        {isFeud &&
+          ['question_active', 'answer_collection_ended', 'answer_reveal', 'round_results'].includes(session.status) && (
             <PlayerFeudView
               session={session}
               participant={participant}
@@ -435,31 +498,11 @@ export default function PlayerContainer({ sessionId, locale = 'en' }: PlayerCont
           )}
 
         {/* DRAW IT GUESS IT MODE */}
-        {(session.activity_type === 'draw_it_guess_it' ||
-          (session.settings as any)?.game_mode === 'draw_it_guess_it') &&
-          ['question_active', 'answer_collection_ended', 'answer_reveal', 'round_results'].includes(
-            session.status
-          ) && (
+        {isDrawIt &&
+          ['question_active', 'answer_collection_ended', 'answer_reveal', 'round_results'].includes(session.status) && (
             <PlayerDrawView
               session={session}
               participant={participant}
-              locale={locale}
-            />
-          )}
-
-        {/* AUDIO GUESS MODE */}
-        {(session.activity_type === 'audio_guess' ||
-          (session.settings as any)?.game_mode === 'audio_guess') &&
-          ['question_active', 'answer_collection_ended', 'answer_reveal', 'round_results'].includes(
-            session.status
-          ) &&
-          audioQuestions[currentIdx] && (
-            <PlayerAudioGuessView
-              session={session}
-              participant={participant}
-              currentQuestion={audioQuestions[currentIdx]}
-              questionIndex={currentIdx}
-              totalQuestions={audioQuestions.length}
               locale={locale}
             />
           )}
@@ -479,11 +522,20 @@ export default function PlayerContainer({ sessionId, locale = 'en' }: PlayerCont
                 {participant.score || 0}
               </div>
             </div>
-            <p className="text-xs text-pink-200/70">
+            <p className="text-xs text-pink-200/70 mb-4">
               {isRtl
                 ? 'تحقق من شاشة العرض لرؤية منصة التتويج والتصنيف!'
                 : 'Check the projector screen to see the podium and rankings!'}
             </p>
+
+            {/* Official Digital Certificate Button */}
+            <button
+              onClick={() => setShowCertificateModal(true)}
+              className="w-full py-3.5 px-5 rounded-2xl bg-gradient-to-r from-amber-500 via-pink-600 to-purple-600 hover:from-amber-400 text-white font-black text-sm shadow-xl flex items-center justify-center gap-2 active:scale-95 transition-all"
+            >
+              <Award className="w-5 h-5" />
+              <span>{isRtl ? 'تحميل شهادة نادي ساكورا الفخرية 🎓' : 'Download Sakura Club Certificate 🎓'}</span>
+            </button>
           </div>
         )}
       </main>
@@ -492,6 +544,16 @@ export default function PlayerContainer({ sessionId, locale = 'en' }: PlayerCont
       <footer className="relative z-10 text-center text-[10px] text-pink-300/40 pt-2 border-t border-pink-500/10">
         Sakura Club Live Sync • {participant.nickname}
       </footer>
+
+      {/* Digital Certificate Modal */}
+      <SakuraCertificateModal
+        isOpen={showCertificateModal}
+        onClose={() => setShowCertificateModal(false)}
+        participantName={participant.nickname}
+        score={participant.score || 0}
+        eventPin={session.room_pin}
+        locale={locale}
+      />
     </div>
   )
 }

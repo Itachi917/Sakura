@@ -33,6 +33,9 @@ export type ActivityType =
   | 'draw_it_guess_it'
   | 'zoom_guess'
   | 'audio_guess'
+  | 'silhouette_guess'
+  | 'emoji_riddle'
+  | 'live_poll'
 export type QuizStatus = 'draft' | 'published' | 'archived'
 export type QuestionType =
   | 'multiple_choice'

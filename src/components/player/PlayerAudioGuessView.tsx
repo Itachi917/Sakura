@@ -47,6 +47,8 @@ export default function PlayerAudioGuessView({
   const supabase = createClient()
   const audioRef = useRef<HTMLAudioElement | null>(null)
 
+  const showOnDevice = (session.settings as Record<string, unknown>)?.show_questions_on_device !== false
+
   const totalSeconds = currentQuestion.total_time_seconds || 30
   const [elapsedSeconds, setElapsedSeconds] = useState(0)
   const [guessInput, setGuessInput] = useState('')
@@ -272,40 +274,54 @@ export default function PlayerAudioGuessView({
 
       {/* ── QUESTION CARD & AUDIO PREVIEW ── */}
       <div className="flex-1 flex flex-col justify-center space-y-4">
-        <div className="p-5 rounded-3xl bg-[#190d26]/90 border border-pink-500/20 text-center shadow-2xl relative overflow-hidden">
-          <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-pink-500/30 to-purple-600/30 border border-pink-400/40 text-pink-300 flex items-center justify-center mx-auto mb-3 shadow-lg">
-            <Music size={28} />
+        {!showOnDevice ? (
+          <div className="p-6 rounded-3xl bg-[#190d26]/90 border border-pink-500/20 text-center shadow-2xl">
+            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-pink-500/30 to-purple-600/30 border border-pink-400/40 text-pink-300 flex items-center justify-center mx-auto mb-3 shadow-lg animate-pulse">
+              <Headphones size={32} />
+            </div>
+            <h3 className="text-xl font-black text-white">
+              {isRtl ? 'استمع للمقطع على شاشة العرض 📽️🎵' : 'Listen to track on the projector! 📽️🎵'}
+            </h3>
+            <p className="text-xs text-pink-200/70 mt-1">
+              {isRtl ? 'خمّن اسم الأنمي بأسرع ما يمكن للحصول على أعلى النقاط!' : 'Guess the anime as fast as possible for bonus speed points!'}
+            </p>
           </div>
+        ) : (
+          <div className="p-5 rounded-3xl bg-[#190d26]/90 border border-pink-500/20 text-center shadow-2xl relative overflow-hidden">
+            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-pink-500/30 to-purple-600/30 border border-pink-400/40 text-pink-300 flex items-center justify-center mx-auto mb-3 shadow-lg">
+              <Music size={28} />
+            </div>
 
-          <h3 className="text-lg lg:text-xl font-black text-white leading-snug">
-            {isRtl ? currentQuestion.title_ar : currentQuestion.title}
-          </h3>
+            <h3 className="text-lg lg:text-xl font-black text-white leading-snug">
+              {isRtl ? currentQuestion.title_ar : currentQuestion.title}
+            </h3>
 
-          <div className="mt-2 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-pink-500/15 border border-pink-400/30 text-pink-200 text-xs font-bold">
-            <span>🏷️</span>
-            <span>{isRtl ? currentQuestion.anime_origin_ar : currentQuestion.anime_origin}</span>
+            <div className="mt-2 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-pink-500/15 border border-pink-400/30 text-pink-200 text-xs font-bold">
+              <span>🏷️</span>
+              <span>{isRtl ? currentQuestion.anime_origin_ar : currentQuestion.anime_origin}</span>
+            </div>
+
+            {/* Optional on-device audio button */}
+            <div className="mt-4 pt-3 border-t border-white/5 flex items-center justify-center">
+              <button
+                onClick={togglePlayAudio}
+                className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 border transition-all ${
+                  isPlayingAudio
+                    ? 'bg-pink-600 text-white border-pink-400 shadow-md scale-105'
+                    : 'bg-white/5 text-pink-300 border-pink-500/20 hover:bg-white/10'
+                }`}
+              >
+                {isPlayingAudio ? <Pause size={14} /> : <Play size={14} />}
+                <Headphones size={14} />
+                <span>
+                  {isPlayingAudio
+                    ? isRtl ? 'إيقاف الصوت في هاتفي' : 'Pause on device'
+                    : isRtl ? 'تشغيل الصوت في هاتفي 🎧' : 'Play on my device 🎧'}
+                </span>
+              </button>
+            </div>
           </div>
-
-          {/* Optional on-device audio button */}
-          <div className="mt-4 pt-3 border-t border-white/5 flex items-center justify-center">
-            <button
-              onClick={togglePlayAudio}
-              className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 border transition-all ${
-                isPlayingAudio
-                  ? 'bg-pink-600 text-white border-pink-400 shadow-md scale-105'
-                  : 'bg-white/5 text-pink-300 border-pink-500/20 hover:bg-white/10'
-              }`}
-            >
-              {isPlayingAudio ? <Pause size={14} /> : <Play size={14} />}
-              <Headphones size={14} />
-              <span>
-                {isPlayingAudio
-                  ? isRtl ? 'إيقاف الصوت في هاتفي' : 'Pause on device'
-                  : isRtl ? 'تشغيل الصوت في هاتفي 🎧' : 'Play on my device 🎧'}
-              </span>
-            </button>
-          </div>
-        </div>
+        )}
 
         {/* Feedback Alert */}
         {feedback && (

@@ -1,12 +1,20 @@
-import type { GameSession, SessionParticipant } from '@/types/database'
+import type { GameSession, SessionParticipant, ActivityType } from '@/types/database'
 import {
   DRAWING_WORDS,
   WHOS_THAT_CHARACTER_QUESTIONS,
   SPACETOON_NOSTALGIA_QUESTIONS,
   ANIME_EXPERT_EXAM_QUESTIONS,
   AUDIO_GUESS_QUESTIONS,
+  ZOOM_GUESS_QUESTIONS,
+  SILHOUETTE_QUESTIONS,
+  EMOJI_RIDDLE_QUESTIONS,
+  LIVE_POLL_QUESTIONS,
   type QuizQuestionData,
   type AudioGuessQuestionData,
+  type ZoomGuessQuestionData,
+  type SilhouetteQuestionData,
+  type EmojiRiddleData,
+  type LivePollData,
 } from './gameData'
 
 /**
@@ -187,4 +195,146 @@ export function getAudioQuestionsForSession(
   }
 
   return AUDIO_GUESS_QUESTIONS
+}
+
+/**
+ * Loads Zoom & Guess questions
+ */
+export function getZoomQuestionsForSession(
+  sessionSettings?: Record<string, unknown> | null
+): ZoomGuessQuestionData[] {
+  if (sessionSettings) {
+    const customQs = sessionSettings.zoom_questions
+    if (Array.isArray(customQs) && customQs.length > 0) {
+      return customQs as ZoomGuessQuestionData[]
+    }
+  }
+
+  if (typeof window !== 'undefined') {
+    try {
+      const saved = localStorage.getItem('sakura_zoom_guess_questions')
+      if (saved) {
+        const parsed = JSON.parse(saved)
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed as ZoomGuessQuestionData[]
+        }
+      }
+    } catch {}
+  }
+
+  return ZOOM_GUESS_QUESTIONS
+}
+
+/**
+ * Loads Silhouette Guess questions
+ */
+export function getSilhouetteQuestionsForSession(
+  sessionSettings?: Record<string, unknown> | null
+): SilhouetteQuestionData[] {
+  if (sessionSettings) {
+    const customQs = sessionSettings.silhouette_questions
+    if (Array.isArray(customQs) && customQs.length > 0) {
+      return customQs as SilhouetteQuestionData[]
+    }
+  }
+
+  if (typeof window !== 'undefined') {
+    try {
+      const saved = localStorage.getItem('sakura_silhouette_questions')
+      if (saved) {
+        const parsed = JSON.parse(saved)
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed as SilhouetteQuestionData[]
+        }
+      }
+    } catch {}
+  }
+
+  return SILHOUETTE_QUESTIONS
+}
+
+/**
+ * Loads Anime Emoji Riddle questions
+ */
+export function getEmojiRiddleQuestionsForSession(
+  sessionSettings?: Record<string, unknown> | null
+): EmojiRiddleData[] {
+  if (sessionSettings) {
+    const customQs = sessionSettings.emoji_questions
+    if (Array.isArray(customQs) && customQs.length > 0) {
+      return customQs as EmojiRiddleData[]
+    }
+  }
+
+  if (typeof window !== 'undefined') {
+    try {
+      const saved = localStorage.getItem('sakura_emoji_questions')
+      if (saved) {
+        const parsed = JSON.parse(saved)
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed as EmojiRiddleData[]
+        }
+      }
+    } catch {}
+  }
+
+  return EMOJI_RIDDLE_QUESTIONS
+}
+
+/**
+ * Loads Live Audience Poll questions
+ */
+export function getLivePollQuestionsForSession(
+  sessionSettings?: Record<string, unknown> | null
+): LivePollData[] {
+  if (sessionSettings) {
+    const customQs = sessionSettings.poll_questions
+    if (Array.isArray(customQs) && customQs.length > 0) {
+      return customQs as LivePollData[]
+    }
+  }
+
+  return LIVE_POLL_QUESTIONS
+}
+
+/**
+ * Seamlessly transitions an existing live session to a new game mode
+ * WITHOUT regenerating room PIN or kicking connected participants!
+ */
+export function prepareGameSwitchSettings(
+  targetActivity: ActivityType | string,
+  currentSettings?: Record<string, unknown> | null
+): {
+  activity_type: ActivityType
+  settings: Record<string, unknown>
+} {
+  const showOnDevice = currentSettings?.show_questions_on_device !== false
+
+  const baseSettings: Record<string, unknown> = {
+    question_index: 0,
+    game_mode: targetActivity,
+    show_questions_on_device: showOnDevice,
+  }
+
+  if (targetActivity === 'audio_guess') {
+    baseSettings.audio_questions = getAudioQuestionsForSession(currentSettings)
+  } else if (targetActivity === 'zoom_guess') {
+    baseSettings.zoom_questions = getZoomQuestionsForSession(currentSettings)
+  } else if (targetActivity === 'silhouette_guess') {
+    baseSettings.silhouette_questions = getSilhouetteQuestionsForSession(currentSettings)
+  } else if (targetActivity === 'emoji_riddle') {
+    baseSettings.emoji_questions = getEmojiRiddleQuestionsForSession(currentSettings)
+  } else if (targetActivity === 'live_poll') {
+    baseSettings.poll_questions = getLivePollQuestionsForSession(currentSettings)
+    baseSettings.poll_votes = {}
+  } else if (targetActivity === 'draw_it_guess_it') {
+    baseSettings.round_duration = 60
+  } else if (['whos_that_character', 'spacetoon_nostalgia', 'anime_expert_exam'].includes(targetActivity)) {
+    baseSettings.quiz_questions = getQuizQuestionsForActivity(targetActivity, currentSettings)
+  }
+
+  return {
+    activity_type: targetActivity as ActivityType,
+    settings: baseSettings,
+  }
 }

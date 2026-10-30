@@ -85,6 +85,44 @@ export interface AudioPreset {
   options: { text: string; text_ar: string; is_correct: boolean }[]
 }
 
+export interface SilhouetteQuestionData {
+  id: string
+  character_name: string
+  character_name_ar: string
+  anime_origin: string
+  anime_origin_ar: string
+  image_url: string
+  aliases: string[]
+  hint: string
+  hint_ar: string
+  total_time_seconds: number
+  base_points: number
+  options?: { id: string; text: string; text_ar: string; is_correct: boolean }[]
+}
+
+export interface EmojiRiddleData {
+  id: string
+  emojis: string
+  answer: string
+  answer_ar: string
+  anime_origin: string
+  anime_origin_ar: string
+  aliases: string[]
+  hint: string
+  hint_ar: string
+  total_time_seconds: number
+  base_points: number
+  options?: { id: string; text: string; text_ar: string; is_correct: boolean }[]
+}
+
+export interface LivePollData {
+  id: string
+  question: string
+  question_ar: string
+  category?: string
+  options: { id: string; text: string; text_ar: string; anime_title?: string }[]
+}
+
 // ------------------------------------------------------------
 // 1. "WHO'S THAT CHARACTER?"
 // ------------------------------------------------------------
@@ -1046,6 +1084,284 @@ export const ANIME_AUDIO_PRESETS: AudioPreset[] = [
       { text: 'Jujutsu Kaisen', text_ar: 'جوجوتسو كايسن', is_correct: false },
       { text: 'Bleach', text_ar: 'بليتش', is_correct: false },
       { text: 'Inuyasha', text_ar: 'إنيوشا', is_correct: false },
+    ],
+  },
+]
+
+// ------------------------------------------------------------
+// 9. "WHO'S THAT SILHOUETTE?" (خمن ظل الشخصية 👤)
+// ------------------------------------------------------------
+export const SILHOUETTE_QUESTIONS: SilhouetteQuestionData[] = [
+  {
+    id: 'sil-1',
+    character_name: 'Son Goku',
+    character_name_ar: 'سون غوكو',
+    anime_origin: 'Dragon Ball Z',
+    anime_origin_ar: 'دراغون بول زد',
+    image_url: 'https://images.unsplash.com/photo-1534447677768-be436bb09401?w=800&auto=format&fit=crop',
+    aliases: ['غوكو', 'سون غوكو', 'Goku', 'Son Goku', 'كاكاروت', 'Kakarot'],
+    hint: 'Saiyan warrior who loves fighting and food; master of the Kamehameha.',
+    hint_ar: 'مقاتل السايان الأسطوري، محب للطعام والقتال وصاحب ضربة الكاميهاميها الشهيرة!',
+    total_time_seconds: 30,
+    base_points: 1000,
+    options: [
+      { id: 'sil-1-a', text: 'Son Goku', text_ar: 'سون غوكو', is_correct: true },
+      { id: 'sil-1-b', text: 'Vegeta', text_ar: 'فيجيتا', is_correct: false },
+      { id: 'sil-1-c', text: 'Gohan', text_ar: 'غوهان', is_correct: false },
+      { id: 'sil-1-d', text: 'Broly', text_ar: 'برولي', is_correct: false },
+    ],
+  },
+  {
+    id: 'sil-2',
+    character_name: 'Monkey D. Luffy',
+    character_name_ar: 'مونكي دي لوفي',
+    anime_origin: 'One Piece',
+    anime_origin_ar: 'ون بيس',
+    image_url: 'https://images.unsplash.com/photo-1579783902614-a3fb3927b675?w=800&auto=format&fit=crop',
+    aliases: ['لوفي', 'مونكي دي لوفي', 'Luffy', 'Monkey D Luffy', 'قبعة القش'],
+    hint: 'Straw Hat captain with rubber body aiming to be the Pirate King.',
+    hint_ar: 'قبطان قبعة القش صاحب جسد المطاط الذي يحلم بأن يصبح ملك القراصنة!',
+    total_time_seconds: 30,
+    base_points: 1000,
+    options: [
+      { id: 'sil-2-a', text: 'Monkey D. Luffy', text_ar: 'مونكي دي لوفي', is_correct: true },
+      { id: 'sil-2-b', text: 'Roronoa Zoro', text_ar: 'رورونوا زورو', is_correct: false },
+      { id: 'sil-2-c', text: 'Portgas D. Ace', text_ar: 'بورتغاس دي إيس', is_correct: false },
+      { id: 'sil-2-d', text: 'Shanks', text_ar: 'شانكس', is_correct: false },
+    ],
+  },
+  {
+    id: 'sil-3',
+    character_name: 'Naruto Uzumaki',
+    character_name_ar: 'ناروتو أوزوماكي',
+    anime_origin: 'Naruto Shippuden',
+    anime_origin_ar: 'ناروتو شيبودن',
+    image_url: 'https://images.unsplash.com/photo-1578632767115-351597cf2477?w=800&auto=format&fit=crop',
+    aliases: ['ناروتو', 'ناروتو اوزوماكي', 'Naruto', 'Naruto Uzumaki'],
+    hint: 'Jinchuriki of the Nine-Tails who never gives up on becoming Hokage.',
+    hint_ar: 'صاحب وحش الذيول التسعة وعزيمة النينجا التي لا تستسلم حتى يصبح هوكاجي!',
+    total_time_seconds: 30,
+    base_points: 1000,
+    options: [
+      { id: 'sil-3-a', text: 'Naruto Uzumaki', text_ar: 'ناروتو أوزوماكي', is_correct: true },
+      { id: 'sil-3-b', text: 'Sasuke Uchiha', text_ar: 'ساسكي أوتشيها', is_correct: false },
+      { id: 'sil-3-c', text: 'Kakashi Hatake', text_ar: 'كاكاشي هاتاكي', is_correct: false },
+      { id: 'sil-3-d', text: 'Minato Namikaze', text_ar: 'ميناتو ناميكازي', is_correct: false },
+    ],
+  },
+  {
+    id: 'sil-4',
+    character_name: 'Levi Ackerman',
+    character_name_ar: 'ليفاي أكرمان',
+    anime_origin: 'Attack on Titan',
+    anime_origin_ar: 'هجوم العمالقة',
+    image_url: 'https://images.unsplash.com/photo-1563089145-599997674d42?w=800&auto=format&fit=crop',
+    aliases: ['ليفاي', 'ليفاي اكرمان', 'Levi', 'Levi Ackerman', 'الكابتن ليفاي'],
+    hint: "Humanity's strongest soldier, Survey Corps captain with dual spinning blades.",
+    hint_ar: 'أقوى جندي في البشرية، قائد فيلق الاستكشاف وعاشق النظافة والشاي الأسود!',
+    total_time_seconds: 30,
+    base_points: 1000,
+    options: [
+      { id: 'sil-4-a', text: 'Levi Ackerman', text_ar: 'ليفاي أكرمان', is_correct: true },
+      { id: 'sil-4-b', text: 'Eren Yeager', text_ar: 'إيرين ييغر', is_correct: false },
+      { id: 'sil-4-c', text: 'Erwin Smith', text_ar: 'إروين سميث', is_correct: false },
+      { id: 'sil-4-d', text: 'Armin Arlert', text_ar: 'أرمين أرليرت', is_correct: false },
+    ],
+  },
+  {
+    id: 'sil-5',
+    character_name: 'Tanjiro Kamado',
+    character_name_ar: 'تانجيرو كامادو',
+    anime_origin: 'Demon Slayer (Kimetsu no Yaiba)',
+    anime_origin_ar: 'قاتل الشياطين',
+    image_url: 'https://images.unsplash.com/photo-1607604276583-eef5d076aa5f?w=800&auto=format&fit=crop',
+    aliases: ['تانجيرو', 'تانجيرو كامادو', 'Tanjiro', 'Tanjiro Kamado'],
+    hint: 'Kind-hearted swordsman wearing hanafuda earrings to cure his sister Nezuko.',
+    hint_ar: 'صاحب أقراط الهانافودا وتنفس الماء والشمس، يسعى لإنقاذ أخته نيزوكو!',
+    total_time_seconds: 30,
+    base_points: 1000,
+    options: [
+      { id: 'sil-5-a', text: 'Tanjiro Kamado', text_ar: 'تانجيرو كامادو', is_correct: true },
+      { id: 'sil-5-b', text: 'Zenitsu Agatsuma', text_ar: 'زينيتسو أغاتسوما', is_correct: false },
+      { id: 'sil-5-c', text: 'Inosuke Hashibira', text_ar: 'إينوسكي هاشيبيرا', is_correct: false },
+      { id: 'sil-5-d', text: 'Giyu Tomioka', text_ar: 'غيو توميوكا', is_correct: false },
+    ],
+  },
+  {
+    id: 'sil-6',
+    character_name: 'Conan Edogawa',
+    character_name_ar: 'كونان إيدوجاوا',
+    anime_origin: 'Detective Conan (Case Closed)',
+    anime_origin_ar: 'المحقق كونان',
+    image_url: 'https://images.unsplash.com/photo-1578632767115-351597cf2477?w=800&auto=format&fit=crop',
+    aliases: ['كونان', 'المحقق كونان', 'Conan', 'Conan Edogawa', 'سينشي', 'Shinichi'],
+    hint: 'Teen detective turned child wearing glasses, bow-tie, and turbo skateboard.',
+    hint_ar: 'المتحري الصغير ذو النظارات وربطة العنق المغيرة للصوت وحذاء الركلات الخارقة!',
+    total_time_seconds: 30,
+    base_points: 1000,
+    options: [
+      { id: 'sil-6-a', text: 'Conan Edogawa', text_ar: 'كونان إيدوجاوا', is_correct: true },
+      { id: 'sil-6-b', text: 'Heiji Hattori', text_ar: 'هيجي هاتوري', is_correct: false },
+      { id: 'sil-6-c', text: 'Kaito Kid', text_ar: 'كايتو كيد', is_correct: false },
+      { id: 'sil-6-d', text: 'Kogoro Mouri', text_ar: 'توغو موري', is_correct: false },
+    ],
+  },
+]
+
+// ------------------------------------------------------------
+// 10. "ANIME EMOJI RIDDLE" (ألغاز الإيموجي للأنمي 🎭)
+// ------------------------------------------------------------
+export const EMOJI_RIDDLE_QUESTIONS: EmojiRiddleData[] = [
+  {
+    id: 'em-1',
+    emojis: '🏴‍☠️ 🍖 👒',
+    answer: 'One Piece',
+    answer_ar: 'ون بيس',
+    anime_origin: 'One Piece',
+    anime_origin_ar: 'ون بيس (إييتشيرو أودا)',
+    aliases: ['ون بيس', 'ونبيس', 'One Piece', 'لوفي'],
+    hint: 'Pirates, meat-loving captain, and a straw hat!',
+    hint_ar: 'قرصان، قبعة قش، وعاشق كبير للحوم في الغراند لاين!',
+    total_time_seconds: 20,
+    base_points: 1000,
+    options: [
+      { id: 'em-1-a', text: 'One Piece', text_ar: 'ون بيس', is_correct: true },
+      { id: 'em-1-b', text: 'Fairy Tail', text_ar: 'فيري تيل', is_correct: false },
+      { id: 'em-1-c', text: 'Toriko', text_ar: 'توريكو', is_correct: false },
+      { id: 'em-1-d', text: 'Black Clover', text_ar: 'بلاك كلوفر', is_correct: false },
+    ],
+  },
+  {
+    id: 'em-2',
+    emojis: '📓 🍎 ✍️',
+    answer: 'Death Note',
+    answer_ar: 'مذكرة الموت',
+    anime_origin: 'Death Note',
+    anime_origin_ar: 'مذكرة الموت (ديث نوت)',
+    aliases: ['مذكرة الموت', 'ديث نوت', 'Death Note', 'لايت', 'ريوك'],
+    hint: 'Notebook, shinigami apple, and a deadly pen!',
+    hint_ar: 'دفتر أسود خارق، تفاح للشينيغامي، وقلم يقرر المصير!',
+    total_time_seconds: 20,
+    base_points: 1000,
+    options: [
+      { id: 'em-2-a', text: 'Death Note', text_ar: 'مذكرة الموت', is_correct: true },
+      { id: 'em-2-b', text: 'Code Geass', text_ar: 'كود غياس', is_correct: false },
+      { id: 'em-2-c', text: 'Monster', text_ar: 'مونستر', is_correct: false },
+      { id: 'em-2-d', text: 'Tokyo Ghoul', text_ar: 'طوكيو غول', is_correct: false },
+    ],
+  },
+  {
+    id: 'em-3',
+    emojis: '👁️ 🧑‍🦯 🤞',
+    answer: 'Jujutsu Kaisen',
+    answer_ar: 'جوجوتسو كايسن',
+    anime_origin: 'Jujutsu Kaisen',
+    anime_origin_ar: 'جوجوتسو كايسن (غوجو ساتورو)',
+    aliases: ['جوجوتسو كايسن', 'جوجوتسو', 'Jujutsu Kaisen', 'JJK', 'غوجو'],
+    hint: 'Six Eyes blindfold, domain expansion finger cross: Infinite Void!',
+    hint_ar: 'عصابة العينين، ضربة بسط المجال بالأصابع، وأقوى ساحر في العالم!',
+    total_time_seconds: 20,
+    base_points: 1000,
+    options: [
+      { id: 'em-3-a', text: 'Jujutsu Kaisen', text_ar: 'جوجوتسو كايسن', is_correct: true },
+      { id: 'em-3-b', text: 'Bleach', text_ar: 'بليتش', is_correct: false },
+      { id: 'em-3-c', text: 'Chainsaw Man', text_ar: 'رجل المنشار', is_correct: false },
+      { id: 'em-3-d', text: 'Mob Psycho 100', text_ar: 'موب سايكو 100', is_correct: false },
+    ],
+  },
+  {
+    id: 'em-4',
+    emojis: '🧑‍🦰 🦊 🍜',
+    answer: 'Naruto',
+    answer_ar: 'ناروتو',
+    anime_origin: 'Naruto',
+    anime_origin_ar: 'ناروتو شيبودن',
+    aliases: ['ناروتو', 'ناروتو شيبودن', 'Naruto', 'Shippuden'],
+    hint: 'Spiky hair, nine-tailed fox, and Ichiraku Ramen bowl!',
+    hint_ar: 'شعر برتقالي/أشقر، ثعلب أسطوري، ورامين إيتشيراكو المفضل!',
+    total_time_seconds: 20,
+    base_points: 1000,
+    options: [
+      { id: 'em-4-a', text: 'Naruto', text_ar: 'ناروتو', is_correct: true },
+      { id: 'em-4-b', text: 'Dragon Ball', text_ar: 'دراغون بول', is_correct: false },
+      { id: 'em-4-c', text: 'Hunter x Hunter', text_ar: 'القناص', is_correct: false },
+      { id: 'em-4-d', text: 'Boruto', text_ar: 'بوروتو', is_correct: false },
+    ],
+  },
+  {
+    id: 'em-5',
+    emojis: '🏐 🧡 🦅',
+    answer: 'Haikyuu!!',
+    answer_ar: 'هايكيو',
+    anime_origin: 'Haikyuu!!',
+    anime_origin_ar: 'هايكيو (ثانوية كاراسونو)',
+    aliases: ['هايكيو', 'Haikyuu', 'Haikyu', 'كرة الطائرة'],
+    hint: 'Volleyball, orange hair Hinata, and Karasuno Crows flying!',
+    hint_ar: 'كرة طائرة، هيناتا شويو، وغربان كاراسونو تحلق نحو القمة!',
+    total_time_seconds: 20,
+    base_points: 1000,
+    options: [
+      { id: 'em-5-a', text: 'Haikyuu!!', text_ar: 'هايكيو', is_correct: true },
+      { id: 'em-5-b', text: 'Kuroko no Basket', text_ar: 'كوروكو نو باسكت', is_correct: false },
+      { id: 'em-5-c', text: 'Blue Lock', text_ar: 'بلو لوك', is_correct: false },
+      { id: 'em-5-d', text: 'Slam Dunk', text_ar: 'سلام دانك', is_correct: false },
+    ],
+  },
+  {
+    id: 'em-6',
+    emojis: '🤖 🪐 🛸',
+    answer: 'Grendizer',
+    answer_ar: 'مغامرات الفضاء غرندايزر',
+    anime_origin: 'UFO Robot Grendizer',
+    anime_origin_ar: 'غرندايزر (سبيستون)',
+    aliases: ['غريندايزر', 'غرندايزر', 'Grendizer', 'Goldorak'],
+    hint: 'Giant super robot, planet Fleed, and flying saucer!',
+    hint_ar: 'الرجل الآلي الخارق، كوكب فليد، والصحن الطائر ضد قوات فيغا!',
+    total_time_seconds: 20,
+    base_points: 1000,
+    options: [
+      { id: 'em-6-a', text: 'Grendizer', text_ar: 'مغامرات الفضاء غرندايزر', is_correct: true },
+      { id: 'em-6-b', text: 'Mazinger Z', text_ar: 'مازنجر زد', is_correct: false },
+      { id: 'em-6-c', text: 'Gundam', text_ar: 'غاندام', is_correct: false },
+      { id: 'em-6-d', text: 'Transformers', text_ar: 'المتحولون', is_correct: false },
+    ],
+  },
+]
+
+// ------------------------------------------------------------
+// 11. "LIVE AUDIENCE POLL" (استطلاع رأي النادي المباشر 📊)
+// ------------------------------------------------------------
+export const LIVE_POLL_QUESTIONS: LivePollData[] = [
+  {
+    id: 'poll-1',
+    question: 'Sub or Dub: How do you prefer watching your anime?',
+    question_ar: 'مترجم أم مدبلج: كيف تفضل مشاهدة الأنمي؟',
+    options: [
+      { id: 'opt-sub', text: 'Original Japanese with Subtitles 🇯🇵', text_ar: 'مترجم باليابانية الأصلية 🇯🇵' },
+      { id: 'opt-dub', text: 'Arabic Spacetoon Dubbing 🎙️', text_ar: 'مدبلج عربي (زمن سبيستون) 🎙️' },
+      { id: 'opt-both', text: 'Both! Depends on the anime 🌸', text_ar: 'كلاهما حسب نوع ومكانة الأنمي 🌸' },
+    ],
+  },
+  {
+    id: 'poll-2',
+    question: 'Which anime genre is your absolute favorite?',
+    question_ar: 'ما هو تصنيفك المفضل في عالم الأنمي؟',
+    options: [
+      { id: 'opt-shonen', text: 'Action & Shonen ⚔️', text_ar: 'شونين وقتالات ملحمية ⚔️' },
+      { id: 'opt-mystery', text: 'Psychological & Mystery 🧠', text_ar: 'غموض وحروب عقول وذكاء 🧠' },
+      { id: 'opt-slice', text: 'Comedy & Slice of Life ☕', text_ar: 'كوميديا وشريحة من الحياة ☕' },
+      { id: 'opt-sports', text: 'Sports & Hype 🏐', text_ar: 'رياضة وحماس وشغف 🏐' },
+    ],
+  },
+  {
+    id: 'poll-3',
+    question: 'Who is the most legendary anime protagonist of all time?',
+    question_ar: 'من هو البطل الأسطوري الأكثر تأثيراً في تاريخ الأنمي؟',
+    options: [
+      { id: 'opt-luffy', text: 'Monkey D. Luffy 🍖', text_ar: 'مونكي دي لوفي 🍖' },
+      { id: 'opt-goku', text: 'Son Goku 🐲', text_ar: 'سون غوكو 🐲' },
+      { id: 'opt-naruto', text: 'Naruto Uzumaki 🦊', text_ar: 'ناروتو أوزوماكي 🦊' },
+      { id: 'opt-conan', text: 'Detective Conan 🔍', text_ar: 'المحقق كونان 🔍' },
     ],
   },
 ]

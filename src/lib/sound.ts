@@ -239,6 +239,106 @@ class SoundManager {
     osc.start(now)
     osc.stop(now + 0.15)
   }
+
+  // Tension heartbeat (double low thump: lub-dub)
+  public playHeartbeat() {
+    if (!this.enabled) return
+    const ctx = this.getContext()
+    if (!ctx) return
+
+    const now = ctx.currentTime
+    const beats = [0, 0.22]
+
+    beats.forEach(offset => {
+      const osc = ctx.createOscillator()
+      const gain = ctx.createGain()
+      const startTime = now + offset
+
+      osc.type = 'sine'
+      osc.frequency.setValueAtTime(65, startTime)
+      osc.frequency.exponentialRampToValueAtTime(35, startTime + 0.18)
+
+      gain.gain.setValueAtTime(0.35, startTime)
+      gain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.18)
+
+      osc.connect(gain)
+      gain.connect(ctx.destination)
+
+      osc.start(startTime)
+      osc.stop(startTime + 0.18)
+    })
+  }
+
+  // Suspense Drumroll leading to a crash
+  public playDrumroll() {
+    if (!this.enabled) return
+    const ctx = this.getContext()
+    if (!ctx) return
+
+    const now = ctx.currentTime
+    const steps = 18
+
+    for (let i = 0; i < steps; i++) {
+      const time = now + i * 0.08
+      const osc = ctx.createOscillator()
+      const gain = ctx.createGain()
+
+      osc.type = 'triangle'
+      osc.frequency.setValueAtTime(140 + Math.random() * 40, time)
+
+      const vol = 0.05 + (i / steps) * 0.25
+      gain.gain.setValueAtTime(vol, time)
+      gain.gain.exponentialRampToValueAtTime(0.001, time + 0.07)
+
+      osc.connect(gain)
+      gain.connect(ctx.destination)
+
+      osc.start(time)
+      osc.stop(time + 0.07)
+    }
+
+    // Final crash
+    const crashTime = now + steps * 0.08
+    const crashOsc = ctx.createOscillator()
+    const crashGain = ctx.createGain()
+    crashOsc.type = 'sawtooth'
+    crashOsc.frequency.setValueAtTime(300, crashTime)
+    crashOsc.frequency.exponentialRampToValueAtTime(60, crashTime + 0.6)
+    crashGain.gain.setValueAtTime(0.4, crashTime)
+    crashGain.gain.exponentialRampToValueAtTime(0.001, crashTime + 0.6)
+    crashOsc.connect(crashGain)
+    crashGain.connect(ctx.destination)
+    crashOsc.start(crashTime)
+    crashOsc.stop(crashTime + 0.6)
+  }
+
+  // Crowd applause / cheering simulation
+  public playApplause() {
+    if (!this.enabled) return
+    const ctx = this.getContext()
+    if (!ctx) return
+
+    const now = ctx.currentTime
+    const clapsCount = 24
+
+    for (let i = 0; i < clapsCount; i++) {
+      const clapTime = now + Math.random() * 1.5
+      const osc = ctx.createOscillator()
+      const gain = ctx.createGain()
+
+      osc.type = 'triangle'
+      osc.frequency.setValueAtTime(400 + Math.random() * 600, clapTime)
+
+      gain.gain.setValueAtTime(0.12 + Math.random() * 0.1, clapTime)
+      gain.gain.exponentialRampToValueAtTime(0.001, clapTime + 0.08)
+
+      osc.connect(gain)
+      gain.connect(ctx.destination)
+
+      osc.start(clapTime)
+      osc.stop(clapTime + 0.08)
+    }
+  }
 }
 
 export const sound = new SoundManager()

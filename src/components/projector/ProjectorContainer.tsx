@@ -14,10 +14,28 @@ import {
   Trophy,
   X,
   Settings,
+  Smartphone,
+  Tv,
+  RefreshCw,
+  Sparkles,
+  HeartPulse,
+  Drum,
+  Gamepad2,
+  Award,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { sound } from '@/lib/sound'
-import { getQuestionIndex, prepareDrawItRound, getQuizQuestionsForActivity, getAudioQuestionsForSession } from '@/lib/gameHelpers'
+import {
+  getQuestionIndex,
+  prepareDrawItRound,
+  getQuizQuestionsForActivity,
+  getAudioQuestionsForSession,
+  getZoomQuestionsForSession,
+  getSilhouetteQuestionsForSession,
+  getEmojiRiddleQuestionsForSession,
+  getLivePollQuestionsForSession,
+  prepareGameSwitchSettings,
+} from '@/lib/gameHelpers'
 import { cn } from '@/lib/utils'
 import type { GameSession, SessionParticipant } from '@/types/database'
 import ProjectorLobby from './ProjectorLobby'
@@ -27,6 +45,9 @@ import ProjectorDraw from './ProjectorDraw'
 import ProjectorLeaderboard from './ProjectorLeaderboard'
 import ProjectorZoomGuess from './ProjectorZoomGuess'
 import ProjectorAudioGuess from './ProjectorAudioGuess'
+import ProjectorSilhouette from './ProjectorSilhouette'
+import ProjectorEmojiRiddle from './ProjectorEmojiRiddle'
+import ProjectorLivePoll from './ProjectorLivePoll'
 import {
   WHOS_THAT_CHARACTER_QUESTIONS,
   SPACETOON_NOSTALGIA_QUESTIONS,
@@ -34,11 +55,17 @@ import {
   SAKURA_FEUD_ROUNDS,
   ZOOM_GUESS_QUESTIONS,
   AUDIO_GUESS_QUESTIONS,
+  SILHOUETTE_QUESTIONS,
+  EMOJI_RIDDLE_QUESTIONS,
+  LIVE_POLL_QUESTIONS,
   DRAWING_WORDS,
   type QuizQuestionData,
   type FeudQuestionData,
   type ZoomGuessQuestionData,
   type AudioGuessQuestionData,
+  type SilhouetteQuestionData,
+  type EmojiRiddleData,
+  type LivePollData,
 } from '@/lib/gameData'
 
 interface ProjectorContainerProps {
@@ -63,7 +90,107 @@ export default function ProjectorContainer({ sessionId, locale = 'en' }: Project
   const [quizQuestions, setQuizQuestions] = useState<QuizQuestionData[]>([])
   const [zoomQuestions, setZoomQuestions] = useState<ZoomGuessQuestionData[]>(ZOOM_GUESS_QUESTIONS)
   const [audioQuestions, setAudioQuestions] = useState<AudioGuessQuestionData[]>(AUDIO_GUESS_QUESTIONS)
+  const [silhouetteQuestions, setSilhouetteQuestions] = useState<SilhouetteQuestionData[]>(SILHOUETTE_QUESTIONS)
+  const [emojiQuestions, setEmojiQuestions] = useState<EmojiRiddleData[]>(EMOJI_RIDDLE_QUESTIONS)
+  const [pollQuestions, setPollQuestions] = useState<LivePollData[]>(LIVE_POLL_QUESTIONS)
   const [feudRounds, setFeudRounds] = useState<FeudQuestionData[]>(SAKURA_FEUD_ROUNDS)
+  const [showGameSwitcherModal, setShowGameSwitcherModal] = useState(false)
+  const [resetScoresOnSwitch, setResetScoresOnSwitch] = useState(false)
+
+  // Question reloader helper
+  const reloadQuestions = (sess: GameSession) => {
+    const settings = sess.settings as Record<string, unknown> | null
+    const mode = (settings as any)?.game_mode || sess.activity_type
+
+    if (mode === 'zoom_guess') {
+      setZoomQuestions(getZoomQuestionsForSession(settings))
+    } else if (mode === 'audio_guess') {
+      setAudioQuestions(getAudioQuestionsForSession(settings))
+    } else if (mode === 'silhouette_guess') {
+      setSilhouetteQuestions(getSilhouetteQuestionsForSession(settings))
+    } else if (mode === 'emoji_riddle') {
+      setEmojiQuestions(getEmojiRiddleQuestionsForSession(settings))
+    } else if (mode === 'live_poll') {
+      setPollQuestions(getLivePollQuestionsForSession(settings))
+    } else if (['whos_that_character', 'spacetoon_nostalgia', 'anime_expert_exam'].includes(mode)) {
+      setQuizQuestions(getQuizQuestionsForActivity(mode, settings))
+    }
+  }
+
+  // Switch Game in-room without regenerating code or kicking participants
+  const handleSwitchGame = async (targetActivity: string) => {
+    if (!session) return
+    setActionLoading(true)
+    sound.playClick()
+    try {
+      const { settings } = prepareGameSwitchSettings(targetActivity, session.settings as any)
+
+      if (resetScoresOnSwitch) {
+        await supabase
+          .from('session_participants')
+          .update({ score: 0 })
+          .eq('session_id', session.id)
+      }
+
+      let { data, error } = await supabase
+        .from('game_sessions')
+        .update({
+          activity_type: targetActivity as any,
+          settings: settings as any,
+          status: 'lobby',
+        })
+        .eq('id', session.id)
+        .select()
+        .single()
+
+      if (error) {
+        const fallbackRes = await supabase
+          .from('game_sessions')
+          .update({
+            activity_type: 'whos_that_character',
+            settings: { ...settings, game_mode: targetActivity } as any,
+            status: 'lobby',
+          })
+          .eq('id', session.id)
+          .select()
+          .single()
+        data = fallbackRes.data
+        error = fallbackRes.error
+      }
+
+      if (data) {
+        setSession(data)
+        reloadQuestions(data)
+        sound.playFanfare()
+      }
+    } catch (err) {
+      console.error('Error switching game:', err)
+    } finally {
+      setActionLoading(false)
+      setShowGameSwitcherModal(false)
+    }
+  }
+
+  // Toggle question display mode (Projector only vs Players phones)
+  const toggleDeviceDisplayMode = async () => {
+    if (!session) return
+    const currentVal = (session.settings as Record<string, unknown>)?.show_questions_on_device !== false
+    const newVal = !currentVal
+    sound.playClick()
+    try {
+      const currentSettings = (session.settings as Record<string, unknown>) || {}
+      const updatedSettings = { ...currentSettings, show_questions_on_device: newVal }
+      const { data } = await supabase
+        .from('game_sessions')
+        .update({
+          settings: updatedSettings as any,
+        })
+        .eq('id', session.id)
+        .select()
+        .single()
+      if (data) setSession(data)
+    } catch {}
+  }
   const [feudRoundState, setFeudRoundState] = useState<{
     team1Score: number
     team2Score: number
@@ -117,9 +244,20 @@ export default function ProjectorContainer({ sessionId, locale = 'en' }: Project
 
   const isZoom = session?.activity_type === 'zoom_guess' || (session?.settings as any)?.game_mode === 'zoom_guess'
   const isAudio = session?.activity_type === 'audio_guess' || (session?.settings as any)?.game_mode === 'audio_guess'
-  const isFeud = session?.activity_type === 'sakura_feud'
-  const isDrawIt = session?.activity_type === 'draw_it_guess_it'
-  const totalQuestions = isZoom
+  const isSilhouette = session?.activity_type === 'silhouette_guess' || (session?.settings as any)?.game_mode === 'silhouette_guess'
+  const isEmoji = session?.activity_type === 'emoji_riddle' || (session?.settings as any)?.game_mode === 'emoji_riddle'
+  const isLivePoll = session?.activity_type === 'live_poll' || (session?.settings as any)?.game_mode === 'live_poll'
+  const isFeud = session?.activity_type === 'sakura_feud' || (session?.settings as any)?.game_mode === 'sakura_feud'
+  const isDrawIt = session?.activity_type === 'draw_it_guess_it' || (session?.settings as any)?.game_mode === 'draw_it_guess_it'
+  const isQuiz = !isZoom && !isAudio && !isSilhouette && !isEmoji && !isLivePoll && !isFeud && !isDrawIt && ['whos_that_character', 'spacetoon_nostalgia', 'anime_expert_exam'].includes(session?.activity_type || '')
+
+  const totalQuestions = isSilhouette
+    ? silhouetteQuestions.length
+    : isEmoji
+    ? emojiQuestions.length
+    : isLivePoll
+    ? pollQuestions.length
+    : isZoom
     ? zoomQuestions.length
     : isAudio
     ? audioQuestions.length
@@ -226,35 +364,7 @@ export default function ProjectorContainer({ sessionId, locale = 'en' }: Project
         }
 
         setSession(sessData)
-
-        // Select proper question set based on activity type
-        const isZoomGame = sessData.activity_type === 'zoom_guess' || (sessData.settings as any)?.game_mode === 'zoom_guess'
-        if (isZoomGame) {
-          const customQs = (sessData.settings as any)?.zoom_questions
-          if (Array.isArray(customQs) && customQs.length > 0) {
-            setZoomQuestions(customQs)
-          } else {
-            try {
-              const localSaved = localStorage.getItem('sakura_zoom_guess_questions')
-              if (localSaved) {
-                const parsed = JSON.parse(localSaved)
-                if (Array.isArray(parsed) && parsed.length > 0) {
-                  setZoomQuestions(parsed)
-                } else {
-                  setZoomQuestions(ZOOM_GUESS_QUESTIONS)
-                }
-              } else {
-                setZoomQuestions(ZOOM_GUESS_QUESTIONS)
-              }
-            } catch {
-              setZoomQuestions(ZOOM_GUESS_QUESTIONS)
-            }
-          }
-        } else if (sessData.activity_type === 'audio_guess' || (sessData.settings as any)?.game_mode === 'audio_guess') {
-          setAudioQuestions(getAudioQuestionsForSession(sessData.settings as any))
-        } else if (['whos_that_character', 'spacetoon_nostalgia', 'anime_expert_exam'].includes(sessData.activity_type)) {
-          setQuizQuestions(getQuizQuestionsForActivity(sessData.activity_type, sessData.settings as any))
-        }
+        reloadQuestions(sessData)
 
         // Fetch participants
         const { data: parts, error: partsErr } = await supabase
@@ -305,10 +415,7 @@ export default function ProjectorContainer({ sessionId, locale = 'en' }: Project
         payload => {
           if (payload.new) {
             const updated = payload.new as GameSession
-            const sessionZoomQs = (updated.settings as any)?.zoom_questions
-            if (Array.isArray(sessionZoomQs) && sessionZoomQs.length > 0) {
-              setZoomQuestions(sessionZoomQs)
-            }
+            reloadQuestions(updated)
             setSession(prev => {
               // Sound effects on status transitions
               if (prev && prev.status !== updated.status) {
@@ -539,36 +646,79 @@ export default function ProjectorContainer({ sessionId, locale = 'en' }: Project
           </div>
         )}
 
-        {/* ZOOM & GUESS STAGE */}
-        {(session.activity_type === 'zoom_guess' || (session.settings as any)?.game_mode === 'zoom_guess') &&
-          ['question_active', 'answer_collection_ended', 'answer_reveal', 'round_results'].includes(
-            session.status
-          ) && (
-            <ProjectorZoomGuess
+        {/* SILHOUETTE GUESS STAGE */}
+        {isSilhouette &&
+          ['question_active', 'answer_collection_ended', 'answer_reveal', 'round_results'].includes(session.status) &&
+          silhouetteQuestions[currentIdx] && (
+            <ProjectorSilhouette
               session={session}
               participants={participants}
-              currentQuestion={
-                zoomQuestions[
-                  Math.min(
-                    zoomQuestions.length - 1,
-                    (session.settings as any)?.question_index || 0
-                  )
-                ] || zoomQuestions[0]
-              }
-              questionIndex={(session.settings as any)?.question_index || 0}
-              totalQuestions={zoomQuestions.length}
+              currentQuestion={silhouetteQuestions[currentIdx]}
+              questionIndex={currentIdx}
+              totalQuestions={totalQuestions}
               locale={locale}
             />
           )}
 
-        {/* QUIZ STAGE (Who\'s That Character, Spacetoon Nostalgia, Anime Expert) */}
-        {['whos_that_character', 'spacetoon_nostalgia', 'anime_expert_exam'].includes(
-          session.activity_type
-        ) &&
-          !((session.settings as any)?.game_mode === 'zoom_guess') &&
-          ['question_active', 'answer_collection_ended', 'answer_reveal', 'round_results'].includes(
-            session.status
-          ) && (
+        {/* EMOJI RIDDLE STAGE */}
+        {isEmoji &&
+          ['question_active', 'answer_collection_ended', 'answer_reveal', 'round_results'].includes(session.status) &&
+          emojiQuestions[currentIdx] && (
+            <ProjectorEmojiRiddle
+              session={session}
+              participants={participants}
+              currentQuestion={emojiQuestions[currentIdx]}
+              questionIndex={currentIdx}
+              totalQuestions={totalQuestions}
+              locale={locale}
+            />
+          )}
+
+        {/* LIVE POLL STAGE */}
+        {isLivePoll &&
+          ['question_active', 'answer_collection_ended', 'answer_reveal', 'round_results'].includes(session.status) &&
+          pollQuestions[currentIdx] && (
+            <ProjectorLivePoll
+              session={session}
+              participants={participants}
+              currentQuestion={pollQuestions[currentIdx]}
+              questionIndex={currentIdx}
+              totalQuestions={totalQuestions}
+              locale={locale}
+            />
+          )}
+
+        {/* AUDIO GUESS STAGE */}
+        {isAudio &&
+          ['question_active', 'answer_collection_ended', 'answer_reveal', 'round_results'].includes(session.status) &&
+          audioQuestions[currentIdx] && (
+            <ProjectorAudioGuess
+              session={session}
+              participants={participants}
+              currentQuestion={audioQuestions[currentIdx]}
+              questionIndex={currentIdx}
+              totalQuestions={totalQuestions}
+              locale={locale}
+            />
+          )}
+
+        {/* ZOOM & GUESS STAGE */}
+        {isZoom &&
+          ['question_active', 'answer_collection_ended', 'answer_reveal', 'round_results'].includes(session.status) &&
+          zoomQuestions[currentIdx] && (
+            <ProjectorZoomGuess
+              session={session}
+              participants={participants}
+              currentQuestion={zoomQuestions[currentIdx]}
+              questionIndex={currentIdx}
+              totalQuestions={totalQuestions}
+              locale={locale}
+            />
+          )}
+
+        {/* QUIZ STAGE (Who's That Character, Spacetoon Nostalgia, Anime Expert) */}
+        {isQuiz &&
+          ['question_active', 'answer_collection_ended', 'answer_reveal', 'round_results'].includes(session.status) && (
             <ProjectorQuiz
               session={session}
               participants={participants}
@@ -578,10 +728,8 @@ export default function ProjectorContainer({ sessionId, locale = 'en' }: Project
           )}
 
         {/* SAKURA FEUD STAGE */}
-        {session.activity_type === 'sakura_feud' &&
-          ['question_active', 'answer_collection_ended', 'answer_reveal', 'round_results'].includes(
-            session.status
-          ) && (
+        {isFeud &&
+          ['question_active', 'answer_collection_ended', 'answer_reveal', 'round_results'].includes(session.status) && (
             <ProjectorFeud
               session={session}
               participants={participants}
@@ -592,31 +740,11 @@ export default function ProjectorContainer({ sessionId, locale = 'en' }: Project
           )}
 
         {/* DRAW IT, GUESS IT STAGE */}
-        {(session.activity_type === 'draw_it_guess_it' ||
-          (session.settings as any)?.game_mode === 'draw_it_guess_it') &&
-          ['question_active', 'answer_collection_ended', 'answer_reveal', 'round_results'].includes(
-            session.status
-          ) && (
+        {isDrawIt &&
+          ['question_active', 'answer_collection_ended', 'answer_reveal', 'round_results'].includes(session.status) && (
             <ProjectorDraw
               session={session}
               participants={participants}
-              locale={locale}
-            />
-          )}
-
-        {/* AUDIO GUESS STAGE */}
-        {(session.activity_type === 'audio_guess' ||
-          (session.settings as any)?.game_mode === 'audio_guess') &&
-          ['question_active', 'answer_collection_ended', 'answer_reveal', 'round_results'].includes(
-            session.status
-          ) &&
-          audioQuestions[currentIdx] && (
-            <ProjectorAudioGuess
-              session={session}
-              participants={participants}
-              currentQuestion={audioQuestions[currentIdx]}
-              questionIndex={currentIdx}
-              totalQuestions={totalQuestions}
               locale={locale}
             />
           )}
@@ -656,6 +784,79 @@ export default function ProjectorContainer({ sessionId, locale = 'en' }: Project
 
             {/* Center: Host Action Controls */}
             <div className="flex items-center gap-2 flex-wrap">
+              {/* Question Display Mode Toggle */}
+              <button
+                onClick={toggleDeviceDisplayMode}
+                className="px-2.5 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-[11px] font-bold text-pink-200 border border-pink-400/30 flex items-center gap-1.5 transition-all shadow-sm"
+                title={isRtl ? 'تبديل ظهور الأسئلة على الهواتف أو الشاشة فقط' : 'Toggle Question Display on phones vs projector only'}
+              >
+                {(session.settings as Record<string, unknown>)?.show_questions_on_device !== false ? (
+                  <>
+                    <Smartphone size={13} className="text-pink-300" />
+                    <span>{isRtl ? 'الأسئلة بالهواتف 📱' : 'On Phones 📱'}</span>
+                  </>
+                ) : (
+                  <>
+                    <Tv size={13} className="text-pink-300" />
+                    <span>{isRtl ? 'البروجكتر فقط 📽️' : 'Projector Only 📽️'}</span>
+                  </>
+                )}
+              </button>
+
+              {/* Game Switcher Button */}
+              <button
+                onClick={() => setShowGameSwitcherModal(true)}
+                className="px-3 py-1.5 rounded-xl bg-purple-600/40 hover:bg-purple-600/60 text-[11px] font-bold text-purple-200 border border-purple-400/40 flex items-center gap-1.5 transition-all shadow-md active:scale-95"
+                title={isRtl ? 'تغيير اللعبة دون توليد كود جديد' : 'Switch game mode in same room'}
+              >
+                <Gamepad2 size={13} className="text-purple-300" />
+                <span>{isRtl ? 'تغيير اللعبة 🎮' : 'Switch Game 🎮'}</span>
+              </button>
+
+              {/* Live Soundboard Pills */}
+              <div className="flex items-center gap-1 border-s border-pink-500/20 ps-2">
+                <button
+                  type="button"
+                  onClick={() => sound.playHeartbeat()}
+                  className="px-2 py-1 rounded-lg bg-pink-500/10 hover:bg-pink-500/30 text-[10px] font-bold text-pink-200 border border-pink-400/20 active:scale-90"
+                  title={isRtl ? 'نبضات ترقب' : 'Tension Heartbeat'}
+                >
+                  💓
+                </button>
+                <button
+                  type="button"
+                  onClick={() => sound.playDrumroll()}
+                  className="px-2 py-1 rounded-lg bg-amber-500/10 hover:bg-amber-500/30 text-[10px] font-bold text-amber-200 border border-amber-400/20 active:scale-90"
+                  title={isRtl ? 'قرع طبول' : 'Drumroll'}
+                >
+                  🥁
+                </button>
+                <button
+                  type="button"
+                  onClick={() => sound.playStrike()}
+                  className="px-2 py-1 rounded-lg bg-red-500/10 hover:bg-red-500/30 text-[10px] font-bold text-red-200 border border-red-400/20 active:scale-90"
+                  title={isRtl ? 'بزر خطأ' : 'Buzzer'}
+                >
+                  ❌
+                </button>
+                <button
+                  type="button"
+                  onClick={() => sound.playApplause()}
+                  className="px-2 py-1 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/30 text-[10px] font-bold text-emerald-200 border border-emerald-400/20 active:scale-90"
+                  title={isRtl ? 'تصفيق وتشجيع' : 'Applause'}
+                >
+                  👏
+                </button>
+                <button
+                  type="button"
+                  onClick={() => sound.playFanfare()}
+                  className="px-2 py-1 rounded-lg bg-purple-500/10 hover:bg-purple-500/30 text-[10px] font-bold text-purple-200 border border-purple-400/20 active:scale-90"
+                  title={isRtl ? 'فانفار فوز' : 'Fanfare'}
+                >
+                  🎺
+                </button>
+              </div>
+
               {session.status === 'lobby' && (
                 <button
                   onClick={() => handleHostAction('question_active', 0)}
@@ -762,6 +963,74 @@ export default function ProjectorContainer({ sessionId, locale = 'en' }: Project
               >
                 <X size={15} />
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL: IN-ROOM GAME SWITCHER ── */}
+      {showGameSwitcherModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
+          <div className="w-full max-w-xl bg-[#200e30] border-2 border-pink-500/40 rounded-3xl p-6 shadow-2xl relative">
+            <button
+              onClick={() => setShowGameSwitcherModal(false)}
+              className="absolute top-4 right-4 p-2 rounded-full bg-white/10 hover:bg-white/20 text-pink-200 transition-all"
+            >
+              <X size={18} />
+            </button>
+
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-2xl">🎮</span>
+              <h3 className="text-xl font-black text-white">
+                {isRtl ? 'تغيير اللعبة دون تغيير الكود أو إخراج اللاعبين' : 'Switch Game in Same Room'}
+              </h3>
+            </div>
+            <p className="text-xs text-pink-200/70 mb-4">
+              {isRtl
+                ? 'يبقى رمز الغرفة (#PIN) وجميع اللاعبين متصلين، وتتحول شاشاتهم فوراً للعبة الجديدة!'
+                : 'Room PIN & all connected players remain intact. Player screens switch instantly!'}
+            </p>
+
+            {/* Score Option */}
+            <div className="mb-4 p-3 rounded-2xl bg-black/40 border border-pink-500/20 flex items-center justify-between text-xs">
+              <span className="font-bold text-pink-200">
+                {isRtl ? 'تصفير نقاط اللاعبين للعبة الجديدة؟' : 'Reset player scores for new game?'}
+              </span>
+              <button
+                type="button"
+                onClick={() => setResetScoresOnSwitch(prev => !prev)}
+                className={`px-3 py-1.5 rounded-xl font-bold transition-all ${
+                  resetScoresOnSwitch ? 'bg-rose-600 text-white' : 'bg-white/10 text-pink-300'
+                }`}
+              >
+                {resetScoresOnSwitch ? (isRtl ? 'نعم (تصفير)' : 'Yes (Reset)') : (isRtl ? 'لا (الاحتفاظ بالنقاط)' : 'No (Keep scores)')}
+              </button>
+            </div>
+
+            {/* Games Grid */}
+            <div className="grid grid-cols-2 gap-2 max-h-[360px] overflow-y-auto pr-1">
+              {[
+                { id: 'spacetoon_nostalgia', name: 'سبيستون نوستالجيا', icon: '📺' },
+                { id: 'whos_that_character', name: 'خمن الشخصية', icon: '🎭' },
+                { id: 'anime_expert_exam', name: 'اختبار الأوتاكو الخبير', icon: '📚' },
+                { id: 'audio_guess', name: 'خمّن الأوست والصوت', icon: '🎵' },
+                { id: 'silhouette_guess', name: 'خمن ظل الشخصية', icon: '👤' },
+                { id: 'zoom_guess', name: 'خمن بالزووم', icon: '🔍' },
+                { id: 'emoji_riddle', name: 'ألغاز إيموجي الأنمي', icon: '🎭' },
+                { id: 'live_poll', name: 'استطلاع رأي الجمهور', icon: '📊' },
+                { id: 'sakura_feud', name: 'صراع الساكورا (الفرق)', icon: '⚔️' },
+                { id: 'draw_it_guess_it', name: 'ارسم وخمّن', icon: '🎨' },
+              ].map(g => (
+                <button
+                  key={g.id}
+                  onClick={() => handleSwitchGame(g.id)}
+                  disabled={actionLoading}
+                  className="p-3 rounded-2xl bg-white/5 hover:bg-pink-600/30 border border-pink-500/20 hover:border-pink-400 text-start flex items-center gap-2.5 transition-all active:scale-95 group"
+                >
+                  <span className="text-xl group-hover:scale-110 transition-transform">{g.icon}</span>
+                  <span className="text-xs font-bold text-pink-100 group-hover:text-white">{g.name}</span>
+                </button>
+              ))}
             </div>
           </div>
         </div>

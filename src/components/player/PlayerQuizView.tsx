@@ -45,23 +45,8 @@ export default function PlayerQuizView({
   const isSilhouetteMode = session.activity_type === 'whos_that_character'
   const hasCommittedScore = useRef(false)
 
-  // Question on device toggle (defaults to true if set in session settings or user preference)
-  const [showOnDevice, setShowOnDevice] = useState<boolean>(() => {
-    if ((session.settings as Record<string, unknown>)?.show_questions_on_device) return true
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('sakura_player_show_question')
-      if (saved !== null) return saved === 'true'
-    }
-    return true
-  })
-
-  const toggleShowOnDevice = () => {
-    const next = !showOnDevice
-    setShowOnDevice(next)
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('sakura_player_show_question', String(next))
-    }
-  }
+  // Question on device setting controlled by the Host in session settings
+  const showOnDevice = (session.settings as Record<string, unknown>)?.show_questions_on_device !== false
 
   const [selectedOptionId, setSelectedOptionId] = useState<string | null>(null)
   const [answeredAt, setAnsweredAt] = useState<number | null>(null)
@@ -169,16 +154,11 @@ export default function PlayerQuizView({
           <span>{`السؤال ${questionIndex + 1} من ${questions.length}`}</span>
 
           <div className="flex items-center gap-2">
-            {/* On-device Question & Media toggle button */}
-            <button
-              type="button"
-              onClick={toggleShowOnDevice}
-              className="px-2.5 py-1 rounded-xl bg-white/10 hover:bg-white/20 text-[11px] font-bold text-pink-200 border border-pink-400/30 flex items-center gap-1.5 transition-colors"
-              title={showOnDevice ? (isRtl ? 'إخفاء تفاصيل السؤال' : 'Compact mode') : (isRtl ? 'عرض السؤال على شاشتي' : 'Show question on screen')}
-            >
-              {showOnDevice ? <Smartphone size={13} className="text-pink-300" /> : <Tv size={13} className="text-pink-300" />}
-              <span>{showOnDevice ? (isRtl ? 'السؤال على شاشتي 📱' : 'On Screen 📱') : (isRtl ? 'البروجكتر فقط 📽️' : 'Projector Only 📽️')}</span>
-            </button>
+            {!showOnDevice && (
+              <span className="px-2.5 py-1 rounded-xl bg-purple-500/20 text-[10px] font-bold text-pink-300 border border-pink-500/20">
+                {isRtl ? 'انظر لشاشة العرض 📽️' : 'Watch Projector 📽️'}
+              </span>
+            )}
 
             <span
               className={`font-mono px-3 py-1 rounded-full text-xs font-black transition-all ${
