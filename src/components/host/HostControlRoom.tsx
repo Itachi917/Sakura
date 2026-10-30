@@ -35,7 +35,6 @@ import {
   getZoomQuestionsForSession,
   getSilhouetteQuestionsForSession,
   getEmojiRiddleQuestionsForSession,
-  getLivePollQuestionsForSession,
   prepareGameSwitchSettings,
 } from '@/lib/gameHelpers'
 import type { GameSession, SessionParticipant, ActivityType } from '@/types/database'
@@ -48,7 +47,6 @@ import {
   AUDIO_GUESS_QUESTIONS,
   SILHOUETTE_QUESTIONS,
   EMOJI_RIDDLE_QUESTIONS,
-  LIVE_POLL_QUESTIONS,
   DRAWING_WORDS,
   type QuizQuestionData,
   type FeudQuestionData,
@@ -56,7 +54,6 @@ import {
   type AudioGuessQuestionData,
   type SilhouetteQuestionData,
   type EmojiRiddleData,
-  type LivePollData,
 } from '@/lib/gameData'
 
 const ALL_GAMES: { id: ActivityType; name: string; name_ar: string; desc: string; emoji: string }[] = [
@@ -64,8 +61,7 @@ const ALL_GAMES: { id: ActivityType; name: string; name_ar: string; desc: string
   { id: 'zoom_guess', name: 'Zoom & Guess', name_ar: 'زووم وتخمين (تقريب الصورة)', desc: 'تقريب تدريجي للشخصية كل 10 ثواني', emoji: '🔍' },
   { id: 'silhouette_guess', name: "Who's That Silhouette?", name_ar: 'خمن ظل الشخصية', desc: 'ظل أسود يكشف ملامحه تدريجياً', emoji: '👤' },
   { id: 'emoji_riddle', name: 'Anime Emoji Riddle', name_ar: 'ألغاز إيموجي الأنمي', desc: 'رموز تعبيرية تمثل حبكة أو شخصية', emoji: '🎭' },
-  { id: 'live_poll', name: 'Live Audience Poll', name_ar: 'استطلاع رأي النادي المباشر', desc: 'تصويت تفاعلي فوري لجمهور القاعة', emoji: '📊' },
-  { id: 'draw_it_guess_it', name: 'Draw It, Guess It', name_ar: 'ارسم وخمّن', desc: 'أحد اللاعبين يرسم والبقية يخمنون', emoji: '🎨' },
+  { id: 'draw_it_guess_it', name: 'Gartic Sakura (Draw & Guess)', name_ar: 'لعبة جارتك (ارسم واخمّن - Gartic.io)', desc: 'أحد اللاعبين يرسم والبقية يخمنون في شات تفاعلي', emoji: '🎨' },
   { id: 'whos_that_character', name: "Who's That Character?", name_ar: 'من هذه الشخصية؟', desc: 'كويز كلاسيكي بصور الشخصيات', emoji: '❓' },
   { id: 'spacetoon_nostalgia', name: 'Spacetoon Nostalgia', name_ar: 'نوستالجيا سبيستون', desc: 'ذكريات الطفولة وشباب المستقبل', emoji: '📺' },
   { id: 'anime_expert_exam', name: 'Anime Expert Exam', name_ar: 'اختبار خبير الأنمي', desc: 'أسئلة حصرية لعشاق الأوتاكو', emoji: '🎓' },
@@ -93,7 +89,6 @@ export default function HostControlRoom({ sessionId, locale = 'en' }: HostContro
   const [audioQuestions, setAudioQuestions] = useState<AudioGuessQuestionData[]>(AUDIO_GUESS_QUESTIONS)
   const [silhouetteQuestions, setSilhouetteQuestions] = useState<SilhouetteQuestionData[]>(SILHOUETTE_QUESTIONS)
   const [emojiQuestions, setEmojiQuestions] = useState<EmojiRiddleData[]>(EMOJI_RIDDLE_QUESTIONS)
-  const [pollQuestions, setPollQuestions] = useState<LivePollData[]>(LIVE_POLL_QUESTIONS)
   const [feudRounds, setFeudRounds] = useState<FeudQuestionData[]>(SAKURA_FEUD_ROUNDS)
 
   // In-room Game Switcher Modal State
@@ -143,7 +138,6 @@ export default function HostControlRoom({ sessionId, locale = 'en' }: HostContro
         const isAudioGame = sess.activity_type === 'audio_guess' || (sess.settings as any)?.game_mode === 'audio_guess'
         const isSilhouetteGame = sess.activity_type === 'silhouette_guess' || (sess.settings as any)?.game_mode === 'silhouette_guess'
         const isEmojiGame = sess.activity_type === 'emoji_riddle' || (sess.settings as any)?.game_mode === 'emoji_riddle'
-        const isPollGame = sess.activity_type === 'live_poll' || (sess.settings as any)?.game_mode === 'live_poll'
 
         if (isZoomGame) {
           setZoomQuestions(getZoomQuestionsForSession(sess.settings as any))
@@ -153,8 +147,6 @@ export default function HostControlRoom({ sessionId, locale = 'en' }: HostContro
           setSilhouetteQuestions(getSilhouetteQuestionsForSession(sess.settings as any))
         } else if (isEmojiGame) {
           setEmojiQuestions(getEmojiRiddleQuestionsForSession(sess.settings as any))
-        } else if (isPollGame) {
-          setPollQuestions(getLivePollQuestionsForSession(sess.settings as any))
         } else if (['whos_that_character', 'spacetoon_nostalgia', 'anime_expert_exam'].includes(sess.activity_type)) {
           setQuizQuestions(getQuizQuestionsForActivity(sess.activity_type, sess.settings as any))
         }
@@ -570,8 +562,6 @@ export default function HostControlRoom({ sessionId, locale = 'en' }: HostContro
           setSilhouetteQuestions(getSilhouetteQuestionsForSession(settings))
         } else if (targetActivity === 'emoji_riddle') {
           setEmojiQuestions(getEmojiRiddleQuestionsForSession(settings))
-        } else if (targetActivity === 'live_poll') {
-          setPollQuestions(getLivePollQuestionsForSession(settings))
         } else if (['whos_that_character', 'spacetoon_nostalgia', 'anime_expert_exam'].includes(targetActivity)) {
           setQuizQuestions(getQuizQuestionsForActivity(targetActivity, settings))
         }
@@ -604,14 +594,12 @@ export default function HostControlRoom({ sessionId, locale = 'en' }: HostContro
   const isAudioGame = activeMode === 'audio_guess'
   const isSilhouetteGame = activeMode === 'silhouette_guess'
   const isEmojiGame = activeMode === 'emoji_riddle'
-  const isPollGame = activeMode === 'live_poll'
 
   const totalQuestions =
     (isZoomGame ? zoomQuestions.length : 0) ||
     (isAudioGame ? audioQuestions.length : 0) ||
     (isSilhouetteGame ? silhouetteQuestions.length : 0) ||
     (isEmojiGame ? emojiQuestions.length : 0) ||
-    (isPollGame ? pollQuestions.length : 0) ||
     (session?.activity_type === 'draw_it_guess_it'
       ? Math.min(15, Math.max(DRAWING_WORDS.length, participants.length || 5))
       : 0) ||
@@ -625,7 +613,6 @@ export default function HostControlRoom({ sessionId, locale = 'en' }: HostContro
   const currentAudioQ = isAudioGame ? (audioQuestions[currentIndex] || audioQuestions[0]) : null
   const currentSilhouetteQ = isSilhouetteGame ? (silhouetteQuestions[currentIndex] || silhouetteQuestions[0]) : null
   const currentEmojiQ = isEmojiGame ? (emojiQuestions[currentIndex] || emojiQuestions[0]) : null
-  const currentPollQ = isPollGame ? (pollQuestions[currentIndex] || pollQuestions[0]) : null
 
   const team1Members = participants.filter(p => participantTeams[p.id] === 'team1' || !participantTeams[p.id])
   const team2Members = participants.filter(p => participantTeams[p.id] === 'team2')
@@ -1177,7 +1164,7 @@ export default function HostControlRoom({ sessionId, locale = 'en' }: HostContro
           </div>
 
           {/* QUESTION PREVIEW (For Quiz modes only) */}
-          {currentQuizQ && !isZoomGame && !isAudioGame && !isSilhouetteGame && !isEmojiGame && !isPollGame && (
+          {currentQuizQ && !isZoomGame && !isAudioGame && !isSilhouetteGame && !isEmojiGame && (
             <div className="p-5 rounded-2xl bg-black/30 border border-pink-500/15">
               <span className="text-xs uppercase tracking-wider text-pink-300/70 font-bold block mb-2">
                 {isRtl ? 'معاينة السؤال الحالي للمنظم:' : 'Host Question Preview:'}
@@ -1393,34 +1380,6 @@ export default function HostControlRoom({ sessionId, locale = 'en' }: HostContro
                   <span>{isRtl ? 'كشف حل اللغز للجمهور 👁️' : 'Reveal Riddle Answer 👁️'}</span>
                 </button>
               )}
-            </div>
-          )}
-
-          {/* LIVE AUDIENCE POLL HOST PREVIEW CARD */}
-          {isPollGame && currentPollQ && (
-            <div className="p-5 rounded-2xl bg-[#1d0b2e] border-2 border-pink-500/30 space-y-4">
-              <div className="flex items-center justify-between pb-3 border-b border-pink-500/20">
-                <span className="text-xs font-black uppercase text-pink-300 tracking-wider flex items-center gap-1.5">
-                  <span>📊</span>
-                  <span>{isRtl ? 'استطلاع الرأي المباشر للجمهور' : 'Live Audience Poll Intel'}</span>
-                </span>
-                <span className="text-xs px-2.5 py-0.5 rounded-full bg-pink-500/20 text-pink-300 font-bold">
-                  {currentPollQ.category}
-                </span>
-              </div>
-
-              <h4 className="text-lg font-black text-white">
-                {isRtl ? currentPollQ.question_ar : currentPollQ.question}
-              </h4>
-
-              <div className="space-y-2">
-                {currentPollQ.options.map(opt => (
-                  <div key={opt.id} className="p-2.5 rounded-xl bg-white/5 border border-pink-500/20 flex items-center justify-between text-xs">
-                    <span className="font-bold text-white">{isRtl ? opt.text_ar : opt.text}</span>
-                    <span className="text-pink-300 font-mono text-[11px]">{opt.anime_title || ''}</span>
-                  </div>
-                ))}
-              </div>
             </div>
           )}
         </div>

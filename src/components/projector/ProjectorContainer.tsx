@@ -33,7 +33,6 @@ import {
   getZoomQuestionsForSession,
   getSilhouetteQuestionsForSession,
   getEmojiRiddleQuestionsForSession,
-  getLivePollQuestionsForSession,
   prepareGameSwitchSettings,
 } from '@/lib/gameHelpers'
 import { cn } from '@/lib/utils'
@@ -47,7 +46,6 @@ import ProjectorZoomGuess from './ProjectorZoomGuess'
 import ProjectorAudioGuess from './ProjectorAudioGuess'
 import ProjectorSilhouette from './ProjectorSilhouette'
 import ProjectorEmojiRiddle from './ProjectorEmojiRiddle'
-import ProjectorLivePoll from './ProjectorLivePoll'
 import {
   WHOS_THAT_CHARACTER_QUESTIONS,
   SPACETOON_NOSTALGIA_QUESTIONS,
@@ -57,7 +55,6 @@ import {
   AUDIO_GUESS_QUESTIONS,
   SILHOUETTE_QUESTIONS,
   EMOJI_RIDDLE_QUESTIONS,
-  LIVE_POLL_QUESTIONS,
   DRAWING_WORDS,
   type QuizQuestionData,
   type FeudQuestionData,
@@ -65,7 +62,6 @@ import {
   type AudioGuessQuestionData,
   type SilhouetteQuestionData,
   type EmojiRiddleData,
-  type LivePollData,
 } from '@/lib/gameData'
 
 interface ProjectorContainerProps {
@@ -92,7 +88,6 @@ export default function ProjectorContainer({ sessionId, locale = 'en' }: Project
   const [audioQuestions, setAudioQuestions] = useState<AudioGuessQuestionData[]>(AUDIO_GUESS_QUESTIONS)
   const [silhouetteQuestions, setSilhouetteQuestions] = useState<SilhouetteQuestionData[]>(SILHOUETTE_QUESTIONS)
   const [emojiQuestions, setEmojiQuestions] = useState<EmojiRiddleData[]>(EMOJI_RIDDLE_QUESTIONS)
-  const [pollQuestions, setPollQuestions] = useState<LivePollData[]>(LIVE_POLL_QUESTIONS)
   const [feudRounds, setFeudRounds] = useState<FeudQuestionData[]>(SAKURA_FEUD_ROUNDS)
   const [showGameSwitcherModal, setShowGameSwitcherModal] = useState(false)
   const [resetScoresOnSwitch, setResetScoresOnSwitch] = useState(false)
@@ -110,8 +105,6 @@ export default function ProjectorContainer({ sessionId, locale = 'en' }: Project
       setSilhouetteQuestions(getSilhouetteQuestionsForSession(settings))
     } else if (mode === 'emoji_riddle') {
       setEmojiQuestions(getEmojiRiddleQuestionsForSession(settings))
-    } else if (mode === 'live_poll') {
-      setPollQuestions(getLivePollQuestionsForSession(settings))
     } else if (['whos_that_character', 'spacetoon_nostalgia', 'anime_expert_exam'].includes(mode)) {
       setQuizQuestions(getQuizQuestionsForActivity(mode, settings))
     }
@@ -247,7 +240,6 @@ export default function ProjectorContainer({ sessionId, locale = 'en' }: Project
   const isAudio = activeMode === 'audio_guess'
   const isSilhouette = activeMode === 'silhouette_guess'
   const isEmoji = activeMode === 'emoji_riddle'
-  const isLivePoll = activeMode === 'live_poll'
   const isFeud = activeMode === 'sakura_feud'
   const isDrawIt = activeMode === 'draw_it_guess_it'
   const isQuiz = ['whos_that_character', 'spacetoon_nostalgia', 'anime_expert_exam'].includes(activeMode)
@@ -256,8 +248,6 @@ export default function ProjectorContainer({ sessionId, locale = 'en' }: Project
     ? silhouetteQuestions.length
     : isEmoji
     ? emojiQuestions.length
-    : isLivePoll
-    ? pollQuestions.length
     : isZoom
     ? zoomQuestions.length
     : isAudio
@@ -676,20 +666,6 @@ export default function ProjectorContainer({ sessionId, locale = 'en' }: Project
             />
           )}
 
-        {/* LIVE POLL STAGE */}
-        {isLivePoll &&
-          ['question_active', 'answer_collection_ended', 'answer_reveal', 'round_results'].includes(session.status) &&
-          pollQuestions[currentIdx] && (
-            <ProjectorLivePoll
-              session={session}
-              participants={participants}
-              currentQuestion={pollQuestions[currentIdx]}
-              questionIndex={currentIdx}
-              totalQuestions={totalQuestions}
-              locale={locale}
-            />
-          )}
-
         {/* AUDIO GUESS STAGE */}
         {isAudio &&
           ['question_active', 'answer_collection_ended', 'answer_reveal', 'round_results'].includes(session.status) &&
@@ -1019,9 +995,8 @@ export default function ProjectorContainer({ sessionId, locale = 'en' }: Project
                 { id: 'silhouette_guess', name: 'خمن ظل الشخصية', icon: '👤' },
                 { id: 'zoom_guess', name: 'خمن بالزووم', icon: '🔍' },
                 { id: 'emoji_riddle', name: 'ألغاز إيموجي الأنمي', icon: '🎭' },
-                { id: 'live_poll', name: 'استطلاع رأي الجمهور', icon: '📊' },
                 { id: 'sakura_feud', name: 'صراع الساكورا (الفرق)', icon: '⚔️' },
-                { id: 'draw_it_guess_it', name: 'ارسم وخمّن', icon: '🎨' },
+                { id: 'draw_it_guess_it', name: 'لعبة جارتك (ارسم واخمّن - Gartic.io)', icon: '🎨' },
               ].map(g => (
                 <button
                   key={g.id}

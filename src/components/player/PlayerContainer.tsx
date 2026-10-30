@@ -13,7 +13,6 @@ import PlayerZoomGuessView from './PlayerZoomGuessView'
 import PlayerAudioGuessView from './PlayerAudioGuessView'
 import PlayerSilhouetteView from './PlayerSilhouetteView'
 import PlayerEmojiRiddleView from './PlayerEmojiRiddleView'
-import PlayerLivePollView from './PlayerLivePollView'
 import SakuraCertificateModal from '../certificate/SakuraCertificateModal'
 import {
   WHOS_THAT_CHARACTER_QUESTIONS,
@@ -23,13 +22,11 @@ import {
   AUDIO_GUESS_QUESTIONS,
   SILHOUETTE_QUESTIONS,
   EMOJI_RIDDLE_QUESTIONS,
-  LIVE_POLL_QUESTIONS,
   type QuizQuestionData,
   type ZoomGuessQuestionData,
   type AudioGuessQuestionData,
   type SilhouetteQuestionData,
   type EmojiRiddleData,
-  type LivePollData,
 } from '@/lib/gameData'
 import {
   getParticipantAvatar,
@@ -38,7 +35,6 @@ import {
   getZoomQuestionsForSession,
   getSilhouetteQuestionsForSession,
   getEmojiRiddleQuestionsForSession,
-  getLivePollQuestionsForSession,
   getQuestionIndex,
 } from '@/lib/gameHelpers'
 
@@ -64,7 +60,6 @@ export default function PlayerContainer({ sessionId, locale = 'en' }: PlayerCont
   const [audioQuestions, setAudioQuestions] = useState<AudioGuessQuestionData[]>(AUDIO_GUESS_QUESTIONS)
   const [silhouetteQuestions, setSilhouetteQuestions] = useState<SilhouetteQuestionData[]>(SILHOUETTE_QUESTIONS)
   const [emojiQuestions, setEmojiQuestions] = useState<EmojiRiddleData[]>(EMOJI_RIDDLE_QUESTIONS)
-  const [pollQuestions, setPollQuestions] = useState<LivePollData[]>(LIVE_POLL_QUESTIONS)
 
   // Question reloader helper
   const reloadQuestions = (sess: GameSession) => {
@@ -79,8 +74,6 @@ export default function PlayerContainer({ sessionId, locale = 'en' }: PlayerCont
       setSilhouetteQuestions(getSilhouetteQuestionsForSession(settings))
     } else if (mode === 'emoji_riddle') {
       setEmojiQuestions(getEmojiRiddleQuestionsForSession(settings))
-    } else if (mode === 'live_poll') {
-      setPollQuestions(getLivePollQuestionsForSession(settings))
     } else if (['whos_that_character', 'spacetoon_nostalgia', 'anime_expert_exam'].includes(mode)) {
       setQuizQuestions(getQuizQuestionsForActivity(mode, settings))
     }
@@ -269,7 +262,6 @@ export default function PlayerContainer({ sessionId, locale = 'en' }: PlayerCont
   const isAudio = activeMode === 'audio_guess'
   const isSilhouette = activeMode === 'silhouette_guess'
   const isEmoji = activeMode === 'emoji_riddle'
-  const isLivePoll = activeMode === 'live_poll'
   const isDrawIt = activeMode === 'draw_it_guess_it'
   const isFeud = activeMode === 'sakura_feud'
   const isQuiz = ['whos_that_character', 'spacetoon_nostalgia', 'anime_expert_exam'].includes(activeMode)
@@ -429,19 +421,6 @@ export default function PlayerContainer({ sessionId, locale = 'en' }: PlayerCont
               currentQuestion={emojiQuestions[currentIdx] || emojiQuestions[0]}
               questionIndex={currentIdx}
               totalQuestions={emojiQuestions.length}
-              locale={locale}
-            />
-          )}
-
-        {/* LIVE POLL MODE */}
-        {isLivePoll &&
-          ['question_active', 'answer_collection_ended', 'answer_reveal', 'round_results'].includes(session.status) && (
-            <PlayerLivePollView
-              session={session}
-              participant={participant}
-              currentQuestion={pollQuestions[currentIdx] || pollQuestions[0]}
-              questionIndex={currentIdx}
-              totalQuestions={pollQuestions.length}
               locale={locale}
             />
           )}

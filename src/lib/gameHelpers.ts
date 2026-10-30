@@ -8,13 +8,11 @@ import {
   ZOOM_GUESS_QUESTIONS,
   SILHOUETTE_QUESTIONS,
   EMOJI_RIDDLE_QUESTIONS,
-  LIVE_POLL_QUESTIONS,
   type QuizQuestionData,
   type AudioGuessQuestionData,
   type ZoomGuessQuestionData,
   type SilhouetteQuestionData,
   type EmojiRiddleData,
-  type LivePollData,
   type DrawingWordData,
 } from './gameData'
 
@@ -94,10 +92,10 @@ export function prepareDrawItRound(
     newDrawnIds = [...newDrawnIds, randomDrawer.id]
   }
 
-  // Pick drawing word from session settings or custom words
+  // Pick drawing words for Gartic-style choice (3 words to choose from)
   const words = getDrawingWordsForSession(currentSettings)
-  const wordIndex = roundIndex % (words.length || 1)
-  const selectedWord = words[wordIndex] || DRAWING_WORDS[0]
+  const shuffledChoices = shuffleArray([...words]).slice(0, 3)
+  const selectedWord = shuffledChoices[0] || DRAWING_WORDS[0]
 
   const roundDuration = 60
   const now = Date.now()
@@ -109,6 +107,8 @@ export function prepareDrawItRound(
     drawer_id: randomDrawer?.id || null,
     drawer_nickname: randomDrawer?.nickname || 'الرسام',
     drawn_participant_ids: newDrawnIds,
+    word_choices: shuffledChoices,
+    drawer_has_chosen_word: false,
     drawing_word: selectedWord.word,
     drawing_word_ar: selectedWord.word_ar,
     drawing_category: selectedWord.category,
@@ -298,22 +298,6 @@ export function getEmojiRiddleQuestionsForSession(
 }
 
 /**
- * Loads Live Audience Poll questions
- */
-export function getLivePollQuestionsForSession(
-  sessionSettings?: Record<string, unknown> | null
-): LivePollData[] {
-  if (sessionSettings) {
-    const customQs = sessionSettings.poll_questions
-    if (Array.isArray(customQs) && customQs.length > 0) {
-      return customQs as LivePollData[]
-    }
-  }
-
-  return LIVE_POLL_QUESTIONS
-}
-
-/**
  * Loads Draw & Guess words, checking session settings, localStorage, and defaults.
  */
 export function getDrawingWordsForSession(
@@ -369,9 +353,6 @@ export function prepareGameSwitchSettings(
     baseSettings.silhouette_questions = shuffleArray(getSilhouetteQuestionsForSession(currentSettings))
   } else if (targetActivity === 'emoji_riddle') {
     baseSettings.emoji_questions = shuffleArray(getEmojiRiddleQuestionsForSession(currentSettings))
-  } else if (targetActivity === 'live_poll') {
-    baseSettings.poll_questions = shuffleArray(getLivePollQuestionsForSession(currentSettings))
-    baseSettings.poll_votes = {}
   } else if (targetActivity === 'draw_it_guess_it') {
     baseSettings.drawing_words = shuffleArray(getDrawingWordsForSession(currentSettings))
     baseSettings.round_duration = 60

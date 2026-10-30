@@ -116,14 +116,6 @@ export interface EmojiRiddleData {
   options?: { id: string; text: string; text_ar: string; is_correct: boolean }[]
 }
 
-export interface LivePollData {
-  id: string
-  question: string
-  question_ar: string
-  category?: string
-  options: { id: string; text: string; text_ar: string; anime_title?: string }[]
-}
-
 // ------------------------------------------------------------
 // 1. "WHO'S THAT CHARACTER?"
 // ------------------------------------------------------------
@@ -540,7 +532,87 @@ export const DRAWING_WORDS: DrawingWordData[] = [
     category: 'Vehicle',
     category_ar: 'مركبة وقوارب',
     difficulty: 'medium',
-    aliases: ['سفينة قراصنة', 'سفينة', 'مركب قراصنة', 'ميري', 'قارب', 'pirate ship', 'ship'],
+    aliases: ['سفينة قراصنة', 'سفينة', 'مركب قراصنة', 'ميري', 'قارب', 'pirate ship', 'ship', 'going merry', 'sunny'],
+  },
+  {
+    word: 'Luffy',
+    word_ar: 'لوفي',
+    category: 'Character',
+    category_ar: 'شخصيات أنمي',
+    difficulty: 'easy',
+    aliases: ['لوفي', 'مونكي دي لوفي', 'قبعة القش', 'luffy', 'monkey d luffy'],
+  },
+  {
+    word: 'Zoro Swords',
+    word_ar: 'سيوف زورو الثلاثة',
+    category: 'Weapon',
+    category_ar: 'أسلحة أنمي',
+    difficulty: 'medium',
+    aliases: ['سيوف زورو', 'سيف زورو', 'ثلاثة سيوف', 'زورو', 'zoro swords', 'zoro'],
+  },
+  {
+    word: 'Conan Glasses',
+    word_ar: 'نظارة كونان',
+    category: 'Accessory',
+    category_ar: 'أدوات كونان',
+    difficulty: 'easy',
+    aliases: ['نظارة كونان', 'نظارات كونان', 'نظارة', 'conan glasses', 'glasses'],
+  },
+  {
+    word: 'Goku',
+    word_ar: 'غوكو',
+    category: 'Character',
+    category_ar: 'شخصيات أنمي',
+    difficulty: 'easy',
+    aliases: ['غوكو', 'سون غوكو', 'سوبر سايان', 'goku', 'son goku'],
+  },
+  {
+    word: 'Nine-Tailed Fox (Kurama)',
+    word_ar: 'الكيوبي (ثعلب التسعة ذيول)',
+    category: 'Creature',
+    category_ar: 'وحوش وكرامات',
+    difficulty: 'hard',
+    aliases: ['كيوبي', 'كوراما', 'ثعلب الكيوبي', 'ثعلب الذيول التسعة', 'kurama', 'nine tails'],
+  },
+  {
+    word: 'Onigiri Rice Ball',
+    word_ar: 'أونيغيري (مثلث الأرز)',
+    category: 'Food',
+    category_ar: 'طعام ياباني',
+    difficulty: 'easy',
+    aliases: ['اونيغيري', 'أونيغيري', 'مثلث أرز', 'كرة ارز', 'onigiri', 'rice ball'],
+  },
+  {
+    word: 'Hollow Mask',
+    word_ar: 'قناع الهولو (إيتشيغو)',
+    category: 'Accessory',
+    category_ar: 'بليتش',
+    difficulty: 'medium',
+    aliases: ['قناع الهولو', 'قناع ايتشيغو', 'هولو', 'hollow mask', 'ichigo mask'],
+  },
+  {
+    word: 'Mecha Robot',
+    word_ar: 'روبوت ميكا فضائي',
+    category: 'Robot',
+    category_ar: 'آليون وعمالقة',
+    difficulty: 'medium',
+    aliases: ['روبوت', 'ميكا', 'رجل الي', 'غرندايزر', 'mecha', 'robot', 'gundam'],
+  },
+  {
+    word: 'Pokeball Belt',
+    word_ar: 'حزام كرات البوكيمون',
+    category: 'Accessory',
+    category_ar: 'بوكيمون',
+    difficulty: 'medium',
+    aliases: ['حزام بوكيمون', 'كرات بوكيمون', 'pokeball belt'],
+  },
+  {
+    word: 'Spacetoon Logo',
+    word_ar: 'شارة سبيستون (شباب المستقبل)',
+    category: 'Nostalgia',
+    category_ar: 'سبيستون',
+    difficulty: 'medium',
+    aliases: ['سبيستون', 'شعار سبيستون', 'كوكب سبيستون', 'spacetoon'],
   },
 ]
 
@@ -1329,40 +1401,4 @@ export const EMOJI_RIDDLE_QUESTIONS: EmojiRiddleData[] = [
   },
 ]
 
-// ------------------------------------------------------------
-// 11. "LIVE AUDIENCE POLL" (استطلاع رأي النادي المباشر 📊)
-// ------------------------------------------------------------
-export const LIVE_POLL_QUESTIONS: LivePollData[] = [
-  {
-    id: 'poll-1',
-    question: 'Sub or Dub: How do you prefer watching your anime?',
-    question_ar: 'مترجم أم مدبلج: كيف تفضل مشاهدة الأنمي؟',
-    options: [
-      { id: 'opt-sub', text: 'Original Japanese with Subtitles 🇯🇵', text_ar: 'مترجم باليابانية الأصلية 🇯🇵' },
-      { id: 'opt-dub', text: 'Arabic Spacetoon Dubbing 🎙️', text_ar: 'مدبلج عربي (زمن سبيستون) 🎙️' },
-      { id: 'opt-both', text: 'Both! Depends on the anime 🌸', text_ar: 'كلاهما حسب نوع ومكانة الأنمي 🌸' },
-    ],
-  },
-  {
-    id: 'poll-2',
-    question: 'Which anime genre is your absolute favorite?',
-    question_ar: 'ما هو تصنيفك المفضل في عالم الأنمي؟',
-    options: [
-      { id: 'opt-shonen', text: 'Action & Shonen ⚔️', text_ar: 'شونين وقتالات ملحمية ⚔️' },
-      { id: 'opt-mystery', text: 'Psychological & Mystery 🧠', text_ar: 'غموض وحروب عقول وذكاء 🧠' },
-      { id: 'opt-slice', text: 'Comedy & Slice of Life ☕', text_ar: 'كوميديا وشريحة من الحياة ☕' },
-      { id: 'opt-sports', text: 'Sports & Hype 🏐', text_ar: 'رياضة وحماس وشغف 🏐' },
-    ],
-  },
-  {
-    id: 'poll-3',
-    question: 'Who is the most legendary anime protagonist of all time?',
-    question_ar: 'من هو البطل الأسطوري الأكثر تأثيراً في تاريخ الأنمي؟',
-    options: [
-      { id: 'opt-luffy', text: 'Monkey D. Luffy 🍖', text_ar: 'مونكي دي لوفي 🍖' },
-      { id: 'opt-goku', text: 'Son Goku 🐲', text_ar: 'سون غوكو 🐲' },
-      { id: 'opt-naruto', text: 'Naruto Uzumaki 🦊', text_ar: 'ناروتو أوزوماكي 🦊' },
-      { id: 'opt-conan', text: 'Detective Conan 🔍', text_ar: 'المحقق كونان 🔍' },
-    ],
-  },
-]
+
