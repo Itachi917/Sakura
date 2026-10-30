@@ -464,6 +464,20 @@ export default function HostControlRoom({ sessionId, locale = 'en' }: HostContro
     setParticipants(prev => prev.filter(p => p.id !== partId))
   }
 
+  // Toggle show questions on players devices
+  const toggleShowQuestionsOnDevice = async () => {
+    if (!session) return
+    sound.playClick()
+    const currentSettings = (session.settings as Record<string, unknown>) || {}
+    const currentVal = !!currentSettings.show_questions_on_device
+    const updatedSettings = { ...currentSettings, show_questions_on_device: !currentVal }
+    await supabase
+      .from('game_sessions')
+      .update({ settings: updatedSettings as unknown as import('@/types/database').Json })
+      .eq('id', session.id)
+    setSession({ ...session, settings: updatedSettings as unknown as import('@/types/database').Json })
+  }
+
   if (loading || !session) {
     return (
       <div className="min-h-screen bg-[var(--midnight-plum)] text-white flex items-center justify-center">
@@ -544,6 +558,38 @@ export default function HostControlRoom({ sessionId, locale = 'en' }: HostContro
                 {currentIndex + 1} / {totalQuestions}
               </span>
             </div>
+          </div>
+
+          {/* Device Questions Display Mode Toggle */}
+          <div className="flex items-center justify-between p-3.5 rounded-2xl bg-black/40 border border-pink-500/20 backdrop-blur-md text-xs">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-pink-500/20 border border-pink-400/30 flex items-center justify-center text-sm">
+                📱
+              </div>
+              <div>
+                <span className="font-bold text-white block">
+                  {isRtl ? 'عرض تفاصيل الأسئلة على هواتف اللاعبين' : 'Show Questions on Player Devices'}
+                </span>
+                <span className="text-[10px] text-pink-200/60">
+                  {isRtl
+                    ? 'يسمح للاعبين برؤية نص السؤال والصورة التوضيحية على أجهزتهم بدلاً من الاعتماد فقط على شاشة البروجكتر'
+                    : 'Enables players to see question text & clue media directly on their phones'}
+                </span>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={toggleShowQuestionsOnDevice}
+              className={`px-3.5 py-1.5 rounded-xl font-black text-xs transition-all ${
+                (session.settings as Record<string, unknown>)?.show_questions_on_device
+                  ? 'bg-pink-600 hover:bg-pink-500 text-white shadow-md shadow-pink-600/30'
+                  : 'bg-white/10 hover:bg-white/20 text-pink-300'
+              }`}
+            >
+              {(session.settings as Record<string, unknown>)?.show_questions_on_device
+                ? (isRtl ? 'مُفعّل ✓' : 'Enabled ✓')
+                : (isRtl ? 'معطّل' : 'Disabled')}
+            </button>
           </div>
 
           {/* SAKURA FEUD COMPLETE CONTROL ENGINE */}

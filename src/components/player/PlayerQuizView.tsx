@@ -1,7 +1,16 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { CheckCircle2, XCircle, Clock, Sparkles } from 'lucide-react'
+import { useState, useEffect, useRef } from 'react'
+import {
+  CheckCircle2,
+  XCircle,
+  Clock,
+  Sparkles,
+  Smartphone,
+  Tv,
+  HelpCircle,
+  Eye,
+} from 'lucide-react'
 import type { GameSession, SessionParticipant } from '@/types/database'
 import type { QuizQuestionData } from '@/lib/gameData'
 import { createClient } from '@/lib/supabase/client'
@@ -33,6 +42,26 @@ export default function PlayerQuizView({
   const questionIndex = getQuestionIndex(session)
   const currentQuestion = questions[questionIndex] || questions[0]
   const isRevealPhase = ['answer_reveal', 'round_results'].includes(session.status)
+  const isSilhouetteMode = session.activity_type === 'whos_that_character'
+  const hasCommittedScore = useRef(false)
+
+  // Question on device toggle (defaults to true if set in session settings or user preference)
+  const [showOnDevice, setShowOnDevice] = useState<boolean>(() => {
+    if ((session.settings as Record<string, unknown>)?.show_questions_on_device) return true
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('sakura_player_show_question')
+      if (saved !== null) return saved === 'true'
+    }
+    return true
+  })
+
+  const toggleShowOnDevice = () => {
+    const next = !showOnDevice
+    setShowOnDevice(next)
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('sakura_player_show_question', String(next))
+    }
+  }
 
   const [selectedOptionId, setSelectedOptionId] = useState<string | null>(null)
   const [answeredAt, setAnsweredAt] = useState<number | null>(null)
@@ -46,7 +75,23 @@ export default function PlayerQuizView({
     setAnsweredAt(null)
     setEarnedPoints(0)
     setTimeLeft(currentQuestion?.time_limit_seconds || 20)
+    hasCommittedScore.current = false
   }, [questionIndex, currentQuestion?.time_limit_seconds])
+
+  // Commit score to database ONLY when round finishes (reveal phase starts)
+  // This prevents players from learning if their answer was correct prematurely!
+  useEffect(() => {
+    if (isRevealPhase && earnedPoints > 0 && !hasCommittedScore.current) {
+      hasCommittedScore.current = true
+      supabase
+        .from('session_participants')
+        .update({
+          score: (participant.score || 0) + earnedPoints,
+        })
+        .eq('id', participant.id)
+        .then(() => {})
+    }
+  }, [isRevealPhase, earnedPoints, participant.id, participant.score, supabase])
 
   // Countdown timer on player device
   useEffect(() => {
@@ -80,7 +125,7 @@ export default function PlayerQuizView({
       const selectedOpt = currentQuestion?.options.find(o => o.id === optionId)
       const isCorrect = !!selectedOpt?.is_correct
 
-      // Calculate score with speed bonus
+      // Calculate score with speed bonus (awarded only upon reveal)
       let pointsAwarded = 0
       if (isCorrect) {
         pointsAwarded = currentQuestion?.points || 1000
@@ -98,16 +143,6 @@ export default function PlayerQuizView({
         submitted_at: new Date().toISOString(),
         answer_payload: { optionId, questionIndex },
       })
-
-      // Update total score if points awarded
-      if (pointsAwarded > 0) {
-        await supabase
-          .from('session_participants')
-          .update({
-            score: (participant.score || 0) + pointsAwarded,
-          })
-          .eq('id', participant.id)
-      }
     } catch (err) {
       console.error('Answer submission error:', err)
     } finally {
@@ -120,21 +155,35 @@ export default function PlayerQuizView({
 
   return (
     <div className="w-full max-w-md mx-auto flex flex-col justify-between h-full py-2 animate-fade-in">
-      {/* Header with question count and timer */}
-      <div className="mb-4">
+      {/* Header with question count, on-device toggle, and timer */}
+      <div className="mb-3">
         <div className="flex items-center justify-between text-xs text-pink-300 font-bold mb-2">
           <span>{`السؤال ${questionIndex + 1} من ${questions.length}`}</span>
-          <span
-            className={`font-mono px-3 py-1 rounded-full text-xs font-black transition-all ${
-              timeLeft <= 5 ? 'bg-red-500/30 text-red-400 animate-pulse' : 'bg-pink-500/20 text-pink-300'
-            }`}
-          >
-            ⏱️ {timeLeft}s
-          </span>
+
+          <div className="flex items-center gap-2">
+            {/* On-device Question & Media toggle button */}
+            <button
+              type="button"
+              onClick={toggleShowOnDevice}
+              className="px-2.5 py-1 rounded-xl bg-white/10 hover:bg-white/20 text-[11px] font-bold text-pink-200 border border-pink-400/30 flex items-center gap-1.5 transition-colors"
+              title={showOnDevice ? (isRtl ? 'إخفاء تفاصيل السؤال' : 'Compact mode') : (isRtl ? 'عرض السؤال على شاشتي' : 'Show question on screen')}
+            >
+              {showOnDevice ? <Smartphone size={13} className="text-pink-300" /> : <Tv size={13} className="text-pink-300" />}
+              <span>{showOnDevice ? (isRtl ? 'السؤال على شاشتي 📱' : 'On Screen 📱') : (isRtl ? 'البروجكتر فقط 📽️' : 'Projector Only 📽️')}</span>
+            </button>
+
+            <span
+              className={`font-mono px-3 py-1 rounded-full text-xs font-black transition-all ${
+                timeLeft <= 5 ? 'bg-red-500/30 text-red-400 animate-pulse' : 'bg-pink-500/20 text-pink-300'
+              }`}
+            >
+              ⏱️ {timeLeft}s
+            </span>
+          </div>
         </div>
 
         {/* Dynamic Progress Bar */}
-        <div className="w-full bg-white/10 rounded-full h-2 overflow-hidden">
+        <div className="w-full bg-white/10 rounded-full h-2 overflow-hidden mb-3">
           <div
             className={`h-full transition-all duration-1000 ${
               timeLeft <= 5 ? 'bg-red-500' : 'bg-gradient-to-r from-pink-500 to-rose-400'
@@ -143,10 +192,41 @@ export default function PlayerQuizView({
           />
         </div>
 
-        {/* Question Title on Player device in Arabic */}
-        <h3 className="text-base sm:text-lg font-bold text-white text-center mt-3 leading-snug">
-          {currentQuestion?.question_text_ar || currentQuestion?.question_text}
-        </h3>
+        {/* Question Details on Device (when showOnDevice is active) */}
+        {showOnDevice && (
+          <div className="p-3.5 rounded-2xl bg-black/40 border border-pink-500/20 backdrop-blur-md mb-2 animate-fade-in">
+            {/* Optional Media (Silhouette Clue / Anime Image) */}
+            {currentQuestion?.media_url && (
+              <div className="relative w-full h-36 sm:h-44 rounded-xl overflow-hidden bg-gradient-to-tr from-pink-950/40 to-purple-950/40 border border-pink-400/30 mb-3 flex items-center justify-center">
+                <img
+                  src={currentQuestion.media_url}
+                  alt="Question Clue"
+                  className={`w-full h-full object-cover transition-all duration-700 ${
+                    isSilhouetteMode && !isRevealPhase
+                      ? 'brightness-0 contrast-200'
+                      : 'brightness-100 contrast-100'
+                  }`}
+                />
+                {isSilhouetteMode && !isRevealPhase && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/25">
+                    <HelpCircle size={32} className="text-pink-300 animate-bounce" />
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Arabic Question Text */}
+            <h3 className="text-sm sm:text-base font-bold text-white text-center leading-snug">
+              {currentQuestion?.question_text_ar || currentQuestion?.question_text}
+            </h3>
+            {/* Optional English Subtitle */}
+            {currentQuestion?.question_text && currentQuestion?.question_text !== currentQuestion?.question_text_ar && (
+              <p className="text-xs text-pink-200/60 text-center mt-1">
+                {currentQuestion.question_text}
+              </p>
+            )}
+          </div>
+        )}
       </div>
 
       {/* ANSWER CHOICES OR CONFIRMATION */}
@@ -188,12 +268,12 @@ export default function PlayerQuizView({
                     key={opt.id}
                     onClick={() => handleSelectOption(opt.id)}
                     disabled={isSubmitting || session.status !== 'question_active' || timeLeft <= 0}
-                    className={`min-h-[100px] sm:min-h-[120px] rounded-2xl ${theme.bg} ${theme.hover} ${theme.active} border-2 ${theme.border} text-white shadow-xl flex flex-col items-center justify-center p-3 text-center transition-transform active:scale-95 disabled:opacity-50`}
+                    className={`min-h-[85px] sm:min-h-[105px] rounded-2xl ${theme.bg} ${theme.hover} ${theme.active} border-2 ${theme.border} text-white shadow-xl flex flex-col items-center justify-center p-2.5 text-center transition-transform active:scale-95 disabled:opacity-50 w-full overflow-hidden`}
                   >
-                    <span className="w-9 h-9 rounded-full bg-black/30 flex items-center justify-center font-black text-lg mb-2">
+                    <span className="w-8 h-8 rounded-full bg-black/30 flex items-center justify-center font-black text-base mb-1.5 shrink-0">
                       {theme.label}
                     </span>
-                    <span className="font-bold text-sm sm:text-base leading-tight">
+                    <span className="font-bold text-xs sm:text-sm leading-snug break-words max-w-full px-1">
                       {opt.text_ar || opt.text}
                     </span>
                   </button>

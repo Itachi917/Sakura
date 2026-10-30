@@ -32,6 +32,7 @@ export default function PlayerContainer({ sessionId, locale = 'en' }: PlayerCont
 
   const [session, setSession] = useState<GameSession | null>(null)
   const [participant, setParticipant] = useState<SessionParticipant | null>(null)
+  const [allParticipants, setAllParticipants] = useState<SessionParticipant[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [quizQuestions, setQuizQuestions] = useState<QuizQuestionData[]>([])
@@ -130,6 +131,14 @@ export default function PlayerContainer({ sessionId, locale = 'en' }: PlayerCont
         }
 
         setParticipant(participantRecord)
+
+        // Fetch all participants for live ranking and podium status
+        const { data: parts } = await supabase
+          .from('session_participants')
+          .select('*')
+          .eq('session_id', sessionId)
+          .order('score', { ascending: false })
+        if (parts) setAllParticipants(parts)
       } catch (err) {
         console.error('Player init error:', err)
         setError('Failed to load session details.')
@@ -181,12 +190,21 @@ export default function PlayerContainer({ sessionId, locale = 'en' }: PlayerCont
           event: '*',
           schema: 'public',
           table: 'session_participants',
-          filter: `id=eq.${participant?.id}`,
+          filter: `session_id=eq.${sessionId}`,
         },
-        payload => {
-          if (payload.new) {
-            setParticipant(payload.new as SessionParticipant)
-          }
+        () => {
+          supabase
+            .from('session_participants')
+            .select('*')
+            .eq('session_id', sessionId)
+            .order('score', { ascending: false })
+            .then(({ data }) => {
+              if (data) {
+                setAllParticipants(data)
+                const me = data.find(p => p.id === participant?.id)
+                if (me) setParticipant(me)
+              }
+            })
         }
       )
       .subscribe()
@@ -221,6 +239,14 @@ export default function PlayerContainer({ sessionId, locale = 'en' }: PlayerCont
       </div>
     )
   }
+
+  // Live Ranking & Podium Calculation
+  const sorted = [...allParticipants].sort((a, b) => (b.score || 0) - (a.score || 0))
+  const myIndex = sorted.findIndex(p => p.id === participant.id)
+  const myRank = myIndex !== -1 ? myIndex + 1 : 1
+  const aheadParticipant = myIndex > 0 ? sorted[myIndex - 1] : null
+  const behindParticipant = myIndex !== -1 && myIndex < sorted.length - 1 ? sorted[myIndex + 1] : null
+  const pointsToAhead = aheadParticipant ? Math.max(0, (aheadParticipant.score || 0) - (participant.score || 0)) : 0
 
   return (
     <div className="min-h-screen text-white flex flex-col justify-between p-4 sm:p-6 relative select-none">
@@ -259,6 +285,67 @@ export default function PlayerContainer({ sessionId, locale = 'en' }: PlayerCont
           <span className="text-[10px] text-pink-300 font-bold uppercase">pts</span>
         </div>
       </header>
+
+      {/* Live Ranking & Podium Bar during gameplay */}
+      {session.status !== 'lobby' && (
+        <div className="relative z-10 w-full mt-2.5 mb-1 animate-fade-in">
+          {myRank === 1 ? (
+            <div className="w-full px-3.5 py-2 rounded-2xl bg-gradient-to-r from-amber-500/25 via-yellow-400/20 to-amber-500/25 border border-amber-400/40 flex items-center justify-between text-xs shadow-lg shadow-amber-500/10">
+              <div className="flex items-center gap-2 font-black text-amber-200">
+                <span className="text-base animate-bounce">👑</span>
+                <span>{isRtl ? 'المركز 1 • على منصة التتويج!' : 'Rank #1 • Podium Leader!'}</span>
+              </div>
+              <span className="text-[11px] font-mono font-black text-amber-300">
+                {behindParticipant
+                  ? (isRtl
+                      ? `+${(participant.score || 0) - (behindParticipant.score || 0)} فارق الصدارة`
+                      : `+${(participant.score || 0) - (behindParticipant.score || 0)} pts lead`)
+                  : (isRtl ? 'المتصدر 🌟' : 'Leader 🌟')}
+              </span>
+            </div>
+          ) : myRank === 2 ? (
+            <div className="w-full px-3.5 py-2 rounded-2xl bg-gradient-to-r from-slate-300/20 via-pink-500/15 to-slate-300/20 border border-slate-300/40 flex items-center justify-between text-xs shadow-lg">
+              <div className="flex items-center gap-2 font-black text-slate-100">
+                <span className="text-base">🥈</span>
+                <span>{isRtl ? 'المركز 2 • على منصة التتويج!' : 'Rank #2 • On the Podium!'}</span>
+              </div>
+              <span className="text-[11px] font-mono font-bold text-pink-200">
+                {aheadParticipant
+                  ? (isRtl ? `يفصلك ${pointsToAhead} نقطة عن المركز الأول` : `${pointsToAhead} pts behind #1`)
+                  : ''}
+              </span>
+            </div>
+          ) : myRank === 3 ? (
+            <div className="w-full px-3.5 py-2 rounded-2xl bg-gradient-to-r from-amber-700/25 via-pink-500/15 to-amber-700/25 border border-amber-600/40 flex items-center justify-between text-xs shadow-lg">
+              <div className="flex items-center gap-2 font-black text-amber-100">
+                <span className="text-base">🥉</span>
+                <span>{isRtl ? 'المركز 3 • على منصة التتويج!' : 'Rank #3 • On the Podium!'}</span>
+              </div>
+              <span className="text-[11px] font-mono font-bold text-pink-200">
+                {aheadParticipant
+                  ? (isRtl ? `يفصلك ${pointsToAhead} نقطة عن ${aheadParticipant.nickname}` : `${pointsToAhead} pts behind ${aheadParticipant.nickname}`)
+                  : ''}
+              </span>
+            </div>
+          ) : (
+            <div className="w-full px-3.5 py-2 rounded-2xl bg-black/40 border border-pink-500/20 backdrop-blur-md flex items-center justify-between text-xs">
+              <div className="flex items-center gap-2 font-bold text-pink-200">
+                <span className="px-2 py-0.5 rounded-md bg-pink-500/20 font-mono font-black text-pink-300 text-[11px]">
+                  #{myRank}
+                </span>
+                <span>{isRtl ? `مركزك الحالي` : `Your Current Rank`}</span>
+              </div>
+              <span className="text-[11px] font-mono text-pink-300/80">
+                {aheadParticipant
+                  ? (isRtl
+                      ? `خلف ${aheadParticipant.nickname} بـ ${pointsToAhead} نقطة`
+                      : `${pointsToAhead} pts behind ${aheadParticipant.nickname}`)
+                  : ''}
+              </span>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* MAIN PLAY SCREEN CONTENT */}
       <main className="relative z-10 flex-1 flex flex-col items-center justify-center py-4">

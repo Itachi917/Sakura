@@ -13,6 +13,7 @@ import {
   Crown,
 } from 'lucide-react'
 import { sound } from '@/lib/sound'
+import { createClient } from '@/lib/supabase/client'
 import type { ZoomGuessQuestionData } from '@/lib/gameData'
 import type { GameSession, SessionParticipant } from '@/types/database'
 
@@ -41,11 +42,13 @@ export default function ProjectorZoomGuess({
   locale = 'en',
 }: ProjectorZoomGuessProps) {
   const isRtl = locale === 'ar'
+  const supabase = createClient()
 
   // Question & Session status
   const totalSeconds = currentQuestion.total_time_seconds || 40
   const [elapsedSeconds, setElapsedSeconds] = useState(0)
   const [solvers, setSolvers] = useState<LiveSolver[]>([])
+  const [imageLoaded, setImageLoaded] = useState(false)
   const isRevealed =
     session.status === 'answer_reveal' ||
     session.status === 'round_results' ||
@@ -70,16 +73,24 @@ export default function ProjectorZoomGuess({
   useEffect(() => {
     setElapsedSeconds(0)
     setSolvers([])
+    setImageLoaded(false)
   }, [currentQuestion.id, questionIndex])
 
-  // Timer interval on projector
+  // Timer interval on projector with auto-reveal on timeout
   useEffect(() => {
     if (isRevealed) return
 
     const timer = setInterval(() => {
       setElapsedSeconds((prev) => {
-        if (prev >= totalSeconds) {
+        if (prev >= totalSeconds - 1) {
           clearInterval(timer)
+          sound.playBuzzer()
+          // Automatically advance to answer_reveal when time expires
+          supabase
+            .from('game_sessions')
+            .update({ status: 'answer_reveal' })
+            .eq('id', session.id)
+            .then(() => {})
           return totalSeconds
         }
         return prev + 1
@@ -87,7 +98,7 @@ export default function ProjectorZoomGuess({
     }, 1000)
 
     return () => clearInterval(timer)
-  }, [isRevealed, totalSeconds])
+  }, [isRevealed, totalSeconds, session.id, supabase])
 
   return (
     <div className="w-full h-full flex flex-col justify-between p-4 sm:p-8 animate-fade-in relative z-10">
@@ -147,14 +158,24 @@ export default function ProjectorZoomGuess({
         <div className="lg:col-span-8 h-full flex flex-col justify-center">
           <div className="relative rounded-3xl overflow-hidden border-4 border-pink-400/50 bg-black shadow-[0_0_60px_rgba(229,106,159,0.3)] aspect-[16/10] sm:aspect-[16/9] w-full flex items-center justify-center">
             {/* Zooming Picture Container */}
-            <div className="w-full h-full overflow-hidden relative flex items-center justify-center">
+            <div className="w-full h-full overflow-hidden relative flex items-center justify-center bg-black">
+              {!imageLoaded && (
+                <div className="absolute inset-0 bg-[#160a22] flex items-center justify-center z-10 animate-pulse">
+                  <div className="w-16 h-16 rounded-3xl bg-pink-500/20 border border-pink-400/40 flex items-center justify-center text-4xl shadow-lg">
+                    🔍
+                  </div>
+                </div>
+              )}
               <img
                 src={currentQuestion.image_url}
                 alt="Zoom Guesser Target"
-                className="w-full h-full object-cover transition-transform duration-1000 ease-out select-none"
+                onLoad={() => setImageLoaded(true)}
+                className="w-full h-full object-cover select-none pointer-events-none"
                 style={{
                   transform: `scale(${currentZoomScale})`,
                   transformOrigin: currentQuestion.focus_point || '50% 30%',
+                  opacity: imageLoaded ? 1 : 0,
+                  transition: imageLoaded ? 'transform 1000ms ease-out, opacity 250ms ease-in' : 'none',
                 }}
               />
             </div>

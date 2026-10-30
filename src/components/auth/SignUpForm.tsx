@@ -19,6 +19,49 @@ export default function SignUpForm({ locale = 'en' }: { locale?: string }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
+  const [otpCode, setOtpCode] = useState('')
+  const [verifyingOtp, setVerifyingOtp] = useState(false)
+  const [otpError, setOtpError] = useState('')
+
+  const handleVerifyOtp = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!otpCode.trim()) return
+    setVerifyingOtp(true)
+    setOtpError('')
+
+    try {
+      const { data, error: vErr } = await supabase.auth.verifyOtp({
+        email: email.trim(),
+        token: otpCode.trim(),
+        type: 'signup',
+      })
+
+      if (vErr) {
+        // Fallback: try email type in case Supabase sends magiclink/email otp
+        const { error: vErr2 } = await supabase.auth.verifyOtp({
+          email: email.trim(),
+          token: otpCode.trim(),
+          type: 'email',
+        })
+        if (vErr2) {
+          setOtpError(
+            isRtl
+              ? 'رمز التحقق غير صحيح أو انتهت صلاحيته.'
+              : 'Invalid or expired verification code.'
+          )
+          setVerifyingOtp(false)
+          return
+        }
+      }
+
+      router.push('/passport')
+      router.refresh()
+    } catch (err: unknown) {
+      setOtpError(err instanceof Error ? err.message : 'Verification failed')
+    } finally {
+      setVerifyingOtp(false)
+    }
+  }
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -97,16 +140,69 @@ export default function SignUpForm({ locale = 'en' }: { locale?: string }) {
 
   if (success) {
     return (
-      <div className="text-center py-6">
-        <div className="text-5xl mb-4">🌸</div>
-        <h3 className="text-white font-bold text-xl mb-3">
-          {isRtl ? 'تم إنشاء الحساب!' : 'Account created!'}
-        </h3>
-        <p className="text-[var(--muted-lavender)] text-sm">
-          {isRtl
-            ? 'تحقق من بريدك الإلكتروني لتأكيد حسابك.'
-            : 'Check your email to confirm your account.'}
-        </p>
+      <div className="py-4 space-y-5 animate-fade-in">
+        <div className="text-center">
+          <div className="text-5xl mb-3 animate-bounce">🌸</div>
+          <h3 className="text-white font-black text-xl mb-1">
+            {isRtl ? 'تم إرسال رمز التحقق!' : 'Verification Code Sent!'}
+          </h3>
+          <p className="text-[var(--muted-lavender)] text-xs leading-relaxed max-w-sm mx-auto">
+            {isRtl
+              ? `أرسلنا رمز تأكيد مكوناً من 6 أرقام إلى بريدك الإلكتروني:`
+              : `We sent a 6-digit verification code to:`}
+          </p>
+          <div className="mt-1 text-pink-300 font-mono font-bold text-xs">
+            {email}
+          </div>
+        </div>
+
+        {/* OTP Input Form */}
+        <form onSubmit={handleVerifyOtp} className="space-y-4">
+          <div>
+            <label className="block text-xs font-bold text-pink-200 mb-1 text-center">
+              {isRtl ? 'أدخل رمز التحقق (OTP)' : 'Enter 6-digit Code'}
+            </label>
+            <input
+              type="text"
+              maxLength={8}
+              value={otpCode}
+              onChange={e => setOtpCode(e.target.value.replace(/\s+/g, ''))}
+              placeholder="123456"
+              className="form-input form-input-dark text-center tracking-widest font-mono text-xl py-3 rounded-2xl font-black text-white"
+              autoFocus
+              required
+            />
+          </div>
+
+          {otpError && (
+            <div className="form-error bg-[rgba(201,76,100,0.1)] px-4 py-2.5 rounded-xl text-xs text-center" role="alert">
+              ⚠️ {otpError}
+            </div>
+          )}
+
+          <button
+            type="submit"
+            disabled={verifyingOtp || !otpCode.trim()}
+            className="btn btn-primary w-full py-3.5 text-sm font-black rounded-2xl shadow-lg shadow-pink-600/30"
+          >
+            {verifyingOtp
+              ? (isRtl ? 'جارٍ التحقق...' : 'Verifying...')
+              : (isRtl ? 'تأكيد الحساب ومتابعة 🌸' : 'Verify & Continue 🌸')}
+          </button>
+        </form>
+
+        <div className="text-center pt-2 border-t border-white/5">
+          <button
+            type="button"
+            onClick={() => {
+              router.push('/login')
+              router.refresh()
+            }}
+            className="text-xs text-pink-300 hover:text-white font-semibold transition-colors"
+          >
+            {isRtl ? 'أكدت عبر الرابط؟ تسجيل الدخول' : 'Confirmed via link? Go to Sign In'}
+          </button>
+        </div>
       </div>
     )
   }

@@ -1,9 +1,24 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { Maximize2, Minimize2, Volume2, VolumeX, Users, Wifi } from 'lucide-react'
+import {
+  Maximize2,
+  Minimize2,
+  Volume2,
+  VolumeX,
+  Users,
+  Wifi,
+  Play,
+  Eye,
+  ChevronRight,
+  Trophy,
+  X,
+  Settings,
+} from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { sound } from '@/lib/sound'
+import { getQuestionIndex } from '@/lib/gameHelpers'
+import { cn } from '@/lib/utils'
 import type { GameSession, SessionParticipant } from '@/types/database'
 import ProjectorLobby from './ProjectorLobby'
 import ProjectorQuiz from './ProjectorQuiz'
@@ -37,6 +52,8 @@ export default function ProjectorContainer({ sessionId, locale = 'en' }: Project
   const [soundEnabled, setSoundEnabled] = useState(true)
   const [loading, setLoading] = useState(true)
   const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'connected' | 'disconnected'>('connecting')
+  const [showHostControls, setShowHostControls] = useState(true)
+  const [actionLoading, setActionLoading] = useState(false)
 
   // Game state
   const [quizQuestions, setQuizQuestions] = useState<QuizQuestionData[]>([])
@@ -92,6 +109,83 @@ export default function ProjectorContainer({ sessionId, locale = 'en' }: Project
     sound.setEnabled(nextVal)
     if (nextVal) sound.playClick()
   }
+
+  const isZoom = session?.activity_type === 'zoom_guess' || (session?.settings as any)?.game_mode === 'zoom_guess'
+  const isFeud = session?.activity_type === 'sakura_feud'
+  const totalQuestions = isZoom ? zoomQuestions.length : isFeud ? feudRounds.length : quizQuestions.length || 5
+  const currentIdx = getQuestionIndex(session)
+
+  // Host Action Dispatcher from Projector View
+  const handleHostAction = async (newStatus: GameSession['status'], newQuestionIndex?: number) => {
+    if (!session) return
+    setActionLoading(true)
+    sound.playClick()
+    try {
+      const currentSettings = (session.settings as Record<string, unknown>) || {}
+      const newSettings = typeof newQuestionIndex === 'number'
+        ? { ...currentSettings, question_index: newQuestionIndex }
+        : currentSettings
+
+      const { data, error } = await supabase
+        .from('game_sessions')
+        .update({
+          status: newStatus,
+          settings: newSettings as unknown as import('@/types/database').Json,
+        })
+        .eq('id', session.id)
+        .select()
+        .single()
+      if (data) setSession(data)
+    } catch (err) {
+      console.error('Host action error from projector:', err)
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
+  // Keyboard shortcuts listener for host on projector
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement)?.tagName)) return
+
+      if (e.key === 'h' || e.key === 'H') {
+        setShowHostControls(prev => !prev)
+        return
+      }
+
+      if (!session) return
+
+      if (e.code === 'Space') {
+        e.preventDefault()
+        if (session.status === 'question_active') {
+          handleHostAction('answer_reveal')
+        } else if (session.status === 'answer_reveal' || session.status === 'round_results') {
+          if (currentIdx + 1 >= totalQuestions) {
+            handleHostAction('final_results')
+          } else {
+            handleHostAction('question_active', currentIdx + 1)
+          }
+        } else if (session.status === 'lobby') {
+          handleHostAction('question_active', 0)
+        }
+      } else if (e.key === 'n' || e.key === 'N' || e.key === 'ArrowRight') {
+        e.preventDefault()
+        if (currentIdx + 1 >= totalQuestions) {
+          handleHostAction('final_results')
+        } else {
+          handleHostAction('question_active', currentIdx + 1)
+        }
+      } else if (e.key === 'r' || e.key === 'R') {
+        e.preventDefault()
+        if (session.status === 'question_active') {
+          handleHostAction('answer_reveal')
+        }
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [session?.status, currentIdx, totalQuestions])
 
   // Initial data loading
   useEffect(() => {
@@ -366,8 +460,22 @@ export default function ProjectorContainer({ sessionId, locale = 'en' }: Project
             <span className="text-xs">{isRtl ? 'لاعب' : 'Players'}</span>
           </div>
 
-          {/* Quick controls (sound & fullscreen) */}
+          {/* Quick controls (sound & fullscreen & host controls) */}
           <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowHostControls(prev => !prev)}
+              className={cn(
+                "px-3 py-2 rounded-xl text-xs font-bold transition-all border flex items-center gap-1.5",
+                showHostControls
+                  ? "bg-pink-600/90 text-white border-pink-400 shadow-md shadow-pink-600/30"
+                  : "bg-white/5 hover:bg-white/10 text-pink-200 border-pink-500/15"
+              )}
+              title={isRtl ? 'إظهار/إخفاء أدوات المضيف (H)' : 'Toggle Host Controls (H)'}
+            >
+              <span>🎛️</span>
+              <span className="hidden sm:inline">{isRtl ? 'تحكم المضيف' : 'Host Dock'}</span>
+            </button>
+
             <button
               onClick={toggleSound}
               className="p-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-pink-200 transition-colors border border-pink-500/10"
@@ -484,6 +592,142 @@ export default function ProjectorContainer({ sessionId, locale = 'en' }: Project
           />
         )}
       </main>
+
+      {/* ── HOST QUICK CONTROL DOCK ON PROJECTOR ── */}
+      {showHostControls && (
+        <div className="fixed bottom-12 left-1/2 -translate-x-1/2 z-50 animate-slide-up max-w-2xl w-[92vw]">
+          <div className="p-3 sm:p-4 rounded-3xl bg-[#1d0b2e]/95 border-2 border-pink-500/40 backdrop-blur-2xl shadow-2xl flex flex-wrap items-center justify-between gap-3">
+            {/* Left: Current Question & Status */}
+            <div className="flex items-center gap-2">
+              <span className="w-8 h-8 rounded-xl bg-pink-500/20 border border-pink-400/30 flex items-center justify-center text-sm">
+                🎛️
+              </span>
+              <div>
+                <div className="text-xs font-mono font-bold text-pink-300">
+                  {session.status === 'lobby'
+                    ? (isRtl ? 'في الانتظار' : 'Lobby')
+                    : isRtl
+                    ? `سؤال ${currentIdx + 1} / ${totalQuestions}`
+                    : `Q ${currentIdx + 1} / ${totalQuestions}`}
+                </div>
+                <div className="text-[10px] text-pink-200/60 font-bold uppercase">
+                  {session.status.replace(/_/g, ' ')}
+                </div>
+              </div>
+            </div>
+
+            {/* Center: Host Action Controls */}
+            <div className="flex items-center gap-2 flex-wrap">
+              {session.status === 'lobby' && (
+                <button
+                  onClick={() => handleHostAction('question_active', 0)}
+                  disabled={actionLoading}
+                  className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 text-white font-black text-xs sm:text-sm shadow-lg flex items-center gap-1.5 transition-all"
+                >
+                  <Play size={15} />
+                  <span>{isRtl ? 'بدء اللعبة الآن 🚀' : 'Start Game 🚀'}</span>
+                </button>
+              )}
+
+              {session.status === 'question_active' && (
+                <>
+                  <button
+                    onClick={() => handleHostAction('answer_reveal')}
+                    disabled={actionLoading}
+                    className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-pink-500 hover:from-amber-400 text-white font-black text-xs sm:text-sm shadow-lg flex items-center gap-1.5 transition-all animate-pulse"
+                  >
+                    <Eye size={15} />
+                    <span>{isRtl ? 'كشف الإجابة (Space)' : 'Reveal Answer (Space)'}</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (currentIdx + 1 >= totalQuestions) {
+                        handleHostAction('final_results')
+                      } else {
+                        handleHostAction('question_active', currentIdx + 1)
+                      }
+                    }}
+                    disabled={actionLoading}
+                    className="px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-pink-200 font-bold text-xs flex items-center gap-1 transition-all"
+                    title={isRtl ? 'تخطي للسؤال التالي' : 'Skip to next'}
+                  >
+                    <ChevronRight size={14} />
+                    <span>{isRtl ? 'تخطي' : 'Skip'}</span>
+                  </button>
+                </>
+              )}
+
+              {session.status === 'answer_reveal' && (
+                <>
+                  <button
+                    onClick={() => handleHostAction('round_results')}
+                    disabled={actionLoading}
+                    className="px-4 py-2.5 rounded-xl bg-purple-600/80 hover:bg-purple-500 text-white font-bold text-xs sm:text-sm border border-purple-400/30 flex items-center gap-1.5 transition-all"
+                  >
+                    <Trophy size={15} className="text-amber-300" />
+                    <span>{isRtl ? 'عرض الصدارة' : 'Leaderboard'}</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (currentIdx + 1 >= totalQuestions) {
+                        handleHostAction('final_results')
+                      } else {
+                        handleHostAction('question_active', currentIdx + 1)
+                      }
+                    }}
+                    disabled={actionLoading}
+                    className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-500 text-white font-black text-xs sm:text-sm shadow-lg flex items-center gap-1.5 transition-all"
+                  >
+                    <span>{currentIdx + 1 >= totalQuestions ? (isRtl ? 'التتويج النهائي 👑' : 'Final Podium 👑') : (isRtl ? 'السؤال التالي (Space)' : 'Next Q (Space)')}</span>
+                    <ChevronRight size={15} />
+                  </button>
+                </>
+              )}
+
+              {session.status === 'round_results' && (
+                <button
+                  onClick={() => {
+                    if (currentIdx + 1 >= totalQuestions) {
+                      handleHostAction('final_results')
+                    } else {
+                      handleHostAction('question_active', currentIdx + 1)
+                    }
+                  }}
+                  disabled={actionLoading}
+                  className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-500 text-white font-black text-xs sm:text-sm shadow-lg flex items-center gap-1.5 transition-all"
+                >
+                  <span>{currentIdx + 1 >= totalQuestions ? (isRtl ? 'التتويج النهائي 👑' : 'Final Podium 👑') : (isRtl ? 'السؤال التالي ⏭️' : 'Next Question ⏭️')}</span>
+                  <ChevronRight size={15} />
+                </button>
+              )}
+
+              {session.status === 'final_results' && (
+                <button
+                  onClick={() => handleHostAction('lobby', 0)}
+                  disabled={actionLoading}
+                  className="px-4 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold text-xs sm:text-sm transition-all"
+                >
+                  <span>{isRtl ? 'إعادة إلى اللوبي 🔄' : 'Return to Lobby 🔄'}</span>
+                </button>
+              )}
+            </div>
+
+            {/* Right: Keyboard shortcuts tip & Close button */}
+            <div className="flex items-center gap-2">
+              <span className="hidden md:inline text-[10px] text-pink-300/60 font-mono">
+                [Space] [N] [R] [H]
+              </span>
+              <button
+                onClick={() => setShowHostControls(false)}
+                className="p-1.5 rounded-lg text-pink-300/60 hover:text-white hover:bg-white/10 transition-colors"
+                title={isRtl ? 'إغلاق لوحة التحكم' : 'Close controls'}
+              >
+                <X size={15} />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* FOOTER BAR */}
       <footer className="relative z-20 flex items-center justify-between px-8 py-3 bg-[#13071c]/90 border-t border-pink-500/10 text-xs text-pink-200/50">

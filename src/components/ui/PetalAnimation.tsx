@@ -100,15 +100,30 @@ function SakuraSvg({ type, size }: { type: ElementType; size: number }) {
 
 export default function PetalAnimation() {
   const [mounted, setMounted] = useState(false)
+  const [enabled, setEnabled] = useState(true)
 
   useEffect(() => {
     const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    if (!prefersReducedMotion) {
-      setMounted(true)
+    const saved = localStorage.getItem('sakura_petals_enabled')
+    const isEnabled = saved !== null ? saved === 'true' : !prefersReducedMotion
+    setEnabled(isEnabled)
+    setMounted(true)
+
+    const handleToggle = (e: Event) => {
+      const customEvent = e as CustomEvent<{ enabled: boolean }>
+      if (customEvent.detail && typeof customEvent.detail.enabled === 'boolean') {
+        setEnabled(customEvent.detail.enabled)
+      } else {
+        const current = localStorage.getItem('sakura_petals_enabled')
+        setEnabled(current !== 'false')
+      }
     }
+
+    window.addEventListener('sakura_petals_changed', handleToggle)
+    return () => window.removeEventListener('sakura_petals_changed', handleToggle)
   }, [])
 
-  if (!mounted) return null
+  if (!mounted || !enabled) return null
 
   // 30 rich, performance-friendly falling sakura petals and leaves across the viewport
   const particles: SakuraParticle[] = [

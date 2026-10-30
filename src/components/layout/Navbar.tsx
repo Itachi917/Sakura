@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { Menu, X, Cherry, Globe } from 'lucide-react'
+import { Menu, X, Cherry, Globe, Sparkles } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import type { User } from '@supabase/supabase-js'
 import type { Profile, UserRole } from '@/types/database'
@@ -50,7 +50,26 @@ export default function Navbar({ locale = 'en', onLocaleChange }: NavProps) {
   const [role, setRole] = useState<UserRole | null>(null)
   const [mobileOpen, setMobileOpen] = useState(false)
   const [scrolled, setScrolled] = useState(false)
+  const [petalsEnabled, setPetalsEnabled] = useState(true)
   const supabase = createClient()
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('sakura_petals_enabled')
+      if (saved !== null) {
+        setPetalsEnabled(saved === 'true')
+      }
+    }
+  }, [])
+
+  const togglePetals = () => {
+    const next = !petalsEnabled
+    setPetalsEnabled(next)
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('sakura_petals_enabled', String(next))
+      window.dispatchEvent(new CustomEvent('sakura_petals_changed', { detail: { enabled: next } }))
+    }
+  }
 
   useEffect(() => {
     // Read actual cookie on client
@@ -156,6 +175,31 @@ export default function Navbar({ locale = 'en', onLocaleChange }: NavProps) {
 
           {/* Right actions */}
           <div className="flex items-center gap-2">
+            {/* Falling Petals Toggle */}
+            <button
+              onClick={togglePetals}
+              className={cn(
+                "btn btn-ghost btn-sm gap-1.5 px-2.5 transition-all",
+                petalsEnabled
+                  ? "text-pink-300 hover:text-white hover:bg-pink-500/15"
+                  : "text-white/40 hover:text-white/70 line-through opacity-75"
+              )}
+              title={
+                petalsEnabled
+                  ? (currentLocale === 'ar' ? 'إيقاف تساقط البتلات' : 'Disable falling petals')
+                  : (currentLocale === 'ar' ? 'تشغيل تساقط البتلات' : 'Enable falling petals')
+              }
+              aria-label="Toggle falling petals"
+              id="petals-toggle"
+            >
+              <span className="text-base select-none">🌸</span>
+              <span className="text-[11px] font-bold hidden lg:inline">
+                {petalsEnabled
+                  ? (currentLocale === 'ar' ? 'البتلات' : 'Petals')
+                  : (currentLocale === 'ar' ? 'إيقاف' : 'Off')}
+              </span>
+            </button>
+
             {/* Language toggle */}
             <button
               onClick={toggleLocale}
@@ -256,6 +300,27 @@ export default function Navbar({ locale = 'en', onLocaleChange }: NavProps) {
               </div>
               <span className="px-2.5 py-0.5 rounded-full bg-pink-500/20 text-xs font-bold text-pink-300 border border-pink-500/30">
                 {currentLocale === 'en' ? 'عربي' : 'EN'}
+              </span>
+            </button>
+
+            {/* Mobile Petals Toggle */}
+            <button
+              onClick={togglePetals}
+              className="flex items-center justify-between px-4 py-3 text-sm text-pink-100 hover:text-white rounded-xl bg-white/5 border border-pink-500/20 transition-all font-semibold my-1"
+            >
+              <div className="flex items-center gap-2">
+                <span className="text-base">🌸</span>
+                <span>{currentLocale === 'ar' ? 'تساقط بتلات الساكورا' : 'Falling Petals'}</span>
+              </div>
+              <span className={cn(
+                "px-2.5 py-0.5 rounded-full text-xs font-bold border",
+                petalsEnabled
+                  ? "bg-pink-500/20 text-pink-300 border-pink-500/30"
+                  : "bg-white/10 text-white/50 border-white/10"
+              )}>
+                {petalsEnabled
+                  ? (currentLocale === 'ar' ? 'مفعل' : 'ON')
+                  : (currentLocale === 'ar' ? 'معطل' : 'OFF')}
               </span>
             </button>
 

@@ -367,14 +367,21 @@ input, textarea, select { font-family: inherit; }
   border-radius: var(--radius-md);
   font-size: 0.9375rem;
   font-weight: 600;
-  line-height: 1;
+  line-height: 1.4;
   border: none;
   transition: all var(--transition-base);
-  white-space: nowrap;
   user-select: none;
   position: relative;
   overflow: hidden;
   cursor: pointer;
+  max-width: 100%;
+  word-break: normal;
+  overflow-wrap: break-word;
+  text-align: center;
+}
+
+html[dir="rtl"] .btn {
+  line-height: 1.5;
 }
 
 .btn::after {

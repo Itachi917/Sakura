@@ -53,7 +53,10 @@ export default function PlayerZoomGuessView({
   // Total time default 40s (4 intervals of 10s)
   const totalSeconds = currentQuestion.total_time_seconds || 40
   const [elapsedSeconds, setElapsedSeconds] = useState(0)
+  const [imageLoaded, setImageLoaded] = useState(false)
+  const hasCommittedScore = useRef(false)
   const isRevealed = session.status === 'answer_reveal' || session.status === 'round_results' || session.status === 'final_results'
+  const isTimeExpired = elapsedSeconds >= totalSeconds
 
   // Calculate current zoom level
   // 0-10s: 4.5x, 10-20s: 3.2x, 20-30s: 2.1x, 30-40s: 1.4x, 40s+: 1.0x
@@ -78,7 +81,21 @@ export default function PlayerZoomGuessView({
     setSolvedPoints(0)
     setFeedback(null)
     setElapsedSeconds(0)
+    setImageLoaded(false)
+    hasCommittedScore.current = false
   }, [currentQuestion.id, questionIndex])
+
+  // Commit score to database once round finishes/reveal phase starts
+  useEffect(() => {
+    if (isRevealed && hasSolved && solvedPoints > 0 && !hasCommittedScore.current) {
+      hasCommittedScore.current = true
+      supabase
+        .from('session_participants')
+        .update({ score: (participant.score || 0) + solvedPoints })
+        .eq('id', participant.id)
+        .then(() => {})
+    }
+  }, [isRevealed, hasSolved, solvedPoints, participant.id, participant.score, supabase])
 
   // Timer interval
   useEffect(() => {
@@ -100,7 +117,7 @@ export default function PlayerZoomGuessView({
   // Handle Guess Submission
   const handleSubmitGuess = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!guessInput.trim() || hasSolved || isRevealed || isSubmitting) return
+    if (!guessInput.trim() || hasSolved || isRevealed || isSubmitting || isTimeExpired) return
 
     setIsSubmitting(true)
     const rawGuess = guessInput.trim()
@@ -122,15 +139,8 @@ export default function PlayerZoomGuessView({
         text: isRtl ? result.feedback_ar : result.feedback,
       })
 
-      // Update participant score in Supabase
+      // Broadcast solve event to host & projector (score is revealed when round finishes)
       try {
-        const newScore = (participant.score || 0) + potentialPoints
-        await supabase
-          .from('session_participants')
-          .update({ score: newScore })
-          .eq('id', participant.id)
-
-        // Broadcast solve event to host & projector
         const channel = supabase.channel(`game-${session.id}`)
         await channel.send({
           type: 'broadcast',
@@ -190,14 +200,24 @@ export default function PlayerZoomGuessView({
       {/* ── ZOOM VIEWPORT CONTAINER ── */}
       <div className="relative rounded-3xl overflow-hidden border-2 border-pink-400/40 bg-black shadow-2xl aspect-[4/3] sm:aspect-[16/10] flex items-center justify-center">
         {/* The zooming image */}
-        <div className="w-full h-full overflow-hidden relative flex items-center justify-center">
+        <div className="w-full h-full overflow-hidden relative flex items-center justify-center bg-black">
+          {!imageLoaded && (
+            <div className="absolute inset-0 bg-[#160a22] flex items-center justify-center z-10 animate-pulse">
+              <div className="w-12 h-12 rounded-2xl bg-pink-500/20 border border-pink-400/30 flex items-center justify-center text-2xl">
+                🔍
+              </div>
+            </div>
+          )}
           <img
             src={currentQuestion.image_url}
             alt="Mystery Character"
-            className="w-full h-full object-cover transition-transform duration-1000 ease-out select-none pointer-events-none"
+            onLoad={() => setImageLoaded(true)}
+            className="w-full h-full object-cover select-none pointer-events-none"
             style={{
               transform: `scale(${currentZoomScale})`,
               transformOrigin: currentQuestion.focus_point || '50% 30%',
+              opacity: imageLoaded ? 1 : 0,
+              transition: imageLoaded ? 'transform 1000ms ease-out, opacity 250ms ease-in' : 'none',
             }}
           />
         </div>
@@ -315,44 +335,58 @@ export default function PlayerZoomGuessView({
         </div>
       )}
 
-      {/* ── PLAYER GUESS INPUT FORM ── */}
+      {/* ── PLAYER GUESS INPUT FORM OR TIME EXPIRED ── */}
       {!hasSolved && !isRevealed && (
-        <form onSubmit={handleSubmitGuess} className="flex flex-col gap-3">
-          <div className="relative flex items-center">
-            <input
-              type="text"
-              value={guessInput}
-              onChange={(e) => setGuessInput(e.target.value)}
-              placeholder={
-                isRtl
-                  ? 'اكتب اسم الشخصية هنا (بالعربي أو الإنجليزي)...'
-                  : 'Type character name (English or Arabic)...'
-              }
-              autoFocus
-              disabled={isSubmitting}
-              className="w-full py-4 pl-4 pr-32 sm:pr-36 rounded-2xl bg-[#241334] border-2 border-pink-400/40 text-white placeholder-pink-200/40 text-base sm:text-lg font-bold focus:outline-none focus:border-pink-300 focus:ring-4 focus:ring-pink-500/20 shadow-xl transition-all"
-            />
-
-            <button
-              type="submit"
-              disabled={!guessInput.trim() || isSubmitting}
-              className="absolute right-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-400 hover:to-purple-500 disabled:opacity-40 text-white font-extrabold text-xs sm:text-sm shadow-md transition-all flex items-center gap-1.5"
-            >
-              <Send size={15} />
-              <span>{isRtl ? 'إرسال' : 'Guess'}</span>
-            </button>
+        isTimeExpired ? (
+          <div className="p-5 rounded-2xl bg-rose-950/40 border border-rose-500/30 text-center animate-scale-in">
+            <div className="text-3xl mb-1">⏱️</div>
+            <div className="text-base font-black text-white mb-1">
+              {isRtl ? 'انتهى وقت التخمين! ⌛' : 'Time is up! ⌛'}
+            </div>
+            <p className="text-xs text-rose-200/70">
+              {isRtl
+                ? 'انتهى المؤقت لهذا السؤال. استعد لكشف الشخصية!'
+                : 'Timer expired for this question. Get ready for the reveal!'}
+            </p>
           </div>
+        ) : (
+          <form onSubmit={handleSubmitGuess} className="flex flex-col gap-3">
+            <div className="relative flex items-center">
+              <input
+                type="text"
+                value={guessInput}
+                onChange={(e) => setGuessInput(e.target.value)}
+                placeholder={
+                  isRtl
+                    ? 'اكتب اسم الشخصية هنا (بالعربي أو الإنجليزي)...'
+                    : 'Type character name (English or Arabic)...'
+                }
+                autoFocus
+                disabled={isSubmitting || isTimeExpired}
+                className="w-full py-4 pl-4 pr-32 sm:pr-36 rounded-2xl bg-[#241334] border-2 border-pink-400/40 text-white placeholder-pink-200/40 text-base sm:text-lg font-bold focus:outline-none focus:border-pink-300 focus:ring-4 focus:ring-pink-500/20 shadow-xl transition-all"
+              />
 
-          {/* Quick Clue Banner */}
-          <div className="flex items-center justify-between text-[11px] text-pink-200/60 px-2">
-            <span>
-              💡 {isRtl ? currentQuestion.hint_ar : currentQuestion.hint}
-            </span>
-            <span className="font-mono text-pink-300">
-              {isRtl ? 'السرعة تمنحك نقاطاً أكثر!' : 'Speed grants maximum score!'}
-            </span>
-          </div>
-        </form>
+              <button
+                type="submit"
+                disabled={!guessInput.trim() || isSubmitting || isTimeExpired}
+                className="absolute right-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-400 hover:to-purple-500 disabled:opacity-40 text-white font-extrabold text-xs sm:text-sm shadow-md transition-all flex items-center gap-1.5"
+              >
+                <Send size={15} />
+                <span>{isRtl ? 'إرسال' : 'Guess'}</span>
+              </button>
+            </div>
+
+            {/* Quick Clue Banner */}
+            <div className="flex items-center justify-between text-[11px] text-pink-200/60 px-2">
+              <span>
+                💡 {isRtl ? currentQuestion.hint_ar : currentQuestion.hint}
+              </span>
+              <span className="font-mono text-pink-300">
+                {isRtl ? 'السرعة تمنحك نقاطاً أكثر!' : 'Speed grants maximum score!'}
+              </span>
+            </div>
+          </form>
+        )
       )}
     </div>
   )

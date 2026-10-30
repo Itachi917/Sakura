@@ -310,7 +310,10 @@ export default function AdminDashboard({ locale = 'en' }: AdminDashboardProps) {
       const pin = generateNumericPin()
       const dummyAdminId = '00000000-0000-0000-0000-000000000000'
 
-      const settingsPayload: Record<string, unknown> = { question_index: 0 }
+      const settingsPayload: Record<string, unknown> = {
+        question_index: 0,
+        show_questions_on_device: true,
+      }
       if (selectedActivity === 'zoom_guess') {
         settingsPayload.game_mode = 'zoom_guess'
         settingsPayload.zoom_questions = zoomQuestions
