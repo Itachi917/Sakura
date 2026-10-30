@@ -114,7 +114,26 @@ export default function ProjectorContainer({ sessionId, locale = 'en' }: Project
         // Select proper question set based on activity type
         const isZoomGame = sessData.activity_type === 'zoom_guess' || (sessData.settings as any)?.game_mode === 'zoom_guess'
         if (isZoomGame) {
-          setZoomQuestions(ZOOM_GUESS_QUESTIONS)
+          const customQs = (sessData.settings as any)?.zoom_questions
+          if (Array.isArray(customQs) && customQs.length > 0) {
+            setZoomQuestions(customQs)
+          } else {
+            try {
+              const localSaved = localStorage.getItem('sakura_zoom_guess_questions')
+              if (localSaved) {
+                const parsed = JSON.parse(localSaved)
+                if (Array.isArray(parsed) && parsed.length > 0) {
+                  setZoomQuestions(parsed)
+                } else {
+                  setZoomQuestions(ZOOM_GUESS_QUESTIONS)
+                }
+              } else {
+                setZoomQuestions(ZOOM_GUESS_QUESTIONS)
+              }
+            } catch {
+              setZoomQuestions(ZOOM_GUESS_QUESTIONS)
+            }
+          }
         } else if (sessData.activity_type === 'whos_that_character') {
           setQuizQuestions(WHOS_THAT_CHARACTER_QUESTIONS)
         } else if (sessData.activity_type === 'spacetoon_nostalgia') {
@@ -172,6 +191,10 @@ export default function ProjectorContainer({ sessionId, locale = 'en' }: Project
         payload => {
           if (payload.new) {
             const updated = payload.new as GameSession
+            const sessionZoomQs = (updated.settings as any)?.zoom_questions
+            if (Array.isArray(sessionZoomQs) && sessionZoomQs.length > 0) {
+              setZoomQuestions(sessionZoomQs)
+            }
             setSession(prev => {
               // Sound effects on status transitions
               if (prev && prev.status !== updated.status) {

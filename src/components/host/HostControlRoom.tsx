@@ -101,7 +101,26 @@ export default function HostControlRoom({ sessionId, locale = 'en' }: HostContro
 
         const isZoomGame = sess.activity_type === 'zoom_guess' || (sess.settings as any)?.game_mode === 'zoom_guess'
         if (isZoomGame) {
-          setZoomQuestions(ZOOM_GUESS_QUESTIONS)
+          const customQs = (sess.settings as any)?.zoom_questions
+          if (Array.isArray(customQs) && customQs.length > 0) {
+            setZoomQuestions(customQs)
+          } else {
+            try {
+              const localSaved = localStorage.getItem('sakura_zoom_guess_questions')
+              if (localSaved) {
+                const parsed = JSON.parse(localSaved)
+                if (Array.isArray(parsed) && parsed.length > 0) {
+                  setZoomQuestions(parsed)
+                } else {
+                  setZoomQuestions(ZOOM_GUESS_QUESTIONS)
+                }
+              } else {
+                setZoomQuestions(ZOOM_GUESS_QUESTIONS)
+              }
+            } catch {
+              setZoomQuestions(ZOOM_GUESS_QUESTIONS)
+            }
+          }
         } else if (sess.activity_type === 'whos_that_character') {
           setQuizQuestions(WHOS_THAT_CHARACTER_QUESTIONS)
         } else if (sess.activity_type === 'spacetoon_nostalgia') {

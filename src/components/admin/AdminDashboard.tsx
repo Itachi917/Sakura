@@ -144,8 +144,21 @@ export default function AdminDashboard({ locale = 'en' }: AdminDashboardProps) {
     explanation_ar: '',
   })
 
-  // 5. Zoom & Guess Questions State
-  const [zoomQuestions, setZoomQuestions] = useState<ZoomGuessQuestionData[]>(ZOOM_GUESS_QUESTIONS)
+  // 5. Zoom & Guess Questions State (Persisted in localStorage & Supabase)
+  const [zoomQuestions, setZoomQuestions] = useState<ZoomGuessQuestionData[]>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem('sakura_zoom_guess_questions')
+        if (stored) {
+          const parsed = JSON.parse(stored)
+          if (Array.isArray(parsed) && parsed.length > 0) return parsed
+        }
+      } catch (e) {
+        console.warn('Error reading zoom questions from localStorage:', e)
+      }
+    }
+    return ZOOM_GUESS_QUESTIONS
+  })
   const [showZoomModal, setShowZoomModal] = useState(false)
   const [editingZoomId, setEditingZoomId] = useState<string | null>(null)
   const [zoomForm, setZoomForm] = useState({
@@ -166,6 +179,66 @@ export default function AdminDashboard({ locale = 'en' }: AdminDashboardProps) {
   const showFeedback = (text: string, type: 'success' | 'error' = 'success') => {
     setFeedbackMsg({ text, type })
     setTimeout(() => setFeedbackMsg(null), 4500)
+  }
+
+  // Persistent save helper for Zoom & Guess questions
+  const saveZoomQuestions = async (updatedList: ZoomGuessQuestionData[]) => {
+    // 1. Immediately update React state
+    setZoomQuestions(updatedList)
+
+    // 2. Immediately persist to localStorage
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('sakura_zoom_guess_questions', JSON.stringify(updatedList))
+      } catch (e) {
+        console.warn('Failed to save zoom questions to localStorage:', e)
+      }
+    }
+
+    // 3. Persist to Supabase in background (best effort, graceful fallback)
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      const dummyAdminId = '00000000-0000-0000-0000-000000000000'
+
+      const { data: existing } = await supabase
+        .from('quizzes')
+        .select('id')
+        .eq('activity_type', 'zoom_guess')
+        .limit(1)
+
+      if (existing && existing.length > 0) {
+        await supabase
+          .from('quizzes')
+          .update({
+            title: 'Zoom & Guess Master Bank',
+            title_ar: 'بنك أسئلة خمن بالزووم',
+            settings: { questions: updatedList } as unknown as import('@/types/database').Json,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', existing[0].id)
+      } else {
+        await supabase
+          .from('quizzes')
+          .insert({
+            title: 'Zoom & Guess Master Bank',
+            title_ar: 'بنك أسئلة خمن بالزووم',
+            activity_type: 'zoom_guess',
+            difficulty: 'mixed',
+            status: 'published',
+            settings: { questions: updatedList } as unknown as import('@/types/database').Json,
+            created_by: user?.id || dummyAdminId,
+          })
+      }
+    } catch (err) {
+      console.warn('Could not sync zoom questions to Supabase (saved locally):', err)
+    }
+  }
+
+  // Reset zoom questions to default curated set
+  const handleResetZoomQuestions = () => {
+    if (!confirm(isRtl ? 'هل تريد استعادة بنك أسئلة الزووم الافتراضي؟ ستفقد التعديلات المخصصة.' : 'Reset Zoom & Guess question bank to original defaults?')) return
+    saveZoomQuestions(ZOOM_GUESS_QUESTIONS)
+    showFeedback(isRtl ? 'تمت استعادة الأسئلة الافتراضية بنجاح 🌸' : 'Reset to curated defaults 🌸')
   }
 
   // Initial Load of All Tables
@@ -191,6 +264,28 @@ export default function AdminDashboard({ locale = 'en' }: AdminDashboardProps) {
       if (stampData) setStamps(stampData)
       if (profData) setProfiles(profData)
       if (quizData) setQuizzes(quizData)
+
+      // Try loading custom zoom questions from Supabase if present
+      try {
+        const { data: zoomQuizData } = await supabase
+          .from('quizzes')
+          .select('settings')
+          .eq('activity_type', 'zoom_guess')
+          .order('updated_at', { ascending: false })
+          .limit(1)
+
+        if (zoomQuizData && zoomQuizData.length > 0) {
+          const remoteQs = (zoomQuizData[0].settings as any)?.questions
+          if (Array.isArray(remoteQs) && remoteQs.length > 0) {
+            setZoomQuestions(remoteQs)
+            if (typeof window !== 'undefined') {
+              localStorage.setItem('sakura_zoom_guess_questions', JSON.stringify(remoteQs))
+            }
+          }
+        }
+      } catch (e) {
+        console.warn('Remote zoom questions load skipped:', e)
+      }
     } catch (err) {
       console.error('Error fetching admin data:', err)
       showFeedback(isRtl ? 'تعذر جلب بعض البيانات من الخادم' : 'Failed to fetch some admin data', 'error')
@@ -218,6 +313,7 @@ export default function AdminDashboard({ locale = 'en' }: AdminDashboardProps) {
       const settingsPayload: Record<string, unknown> = { question_index: 0 }
       if (selectedActivity === 'zoom_guess') {
         settingsPayload.game_mode = 'zoom_guess'
+        settingsPayload.zoom_questions = zoomQuestions
       }
 
       let { data: newSess, error } = await supabase
@@ -242,7 +338,7 @@ export default function AdminDashboard({ locale = 'en' }: AdminDashboardProps) {
             room_pin: pin,
             status: 'lobby',
             host_id: user?.id || dummyAdminId,
-            settings: { question_index: 0, game_mode: 'zoom_guess' } as unknown as import('@/types/database').Json,
+            settings: { question_index: 0, game_mode: 'zoom_guess', zoom_questions: zoomQuestions } as unknown as import('@/types/database').Json,
             created_at: new Date().toISOString(),
           })
           .select()
@@ -1044,29 +1140,41 @@ export default function AdminDashboard({ locale = 'en' }: AdminDashboardProps) {
               </p>
             </div>
 
-            <button
-              onClick={() => {
-                setEditingZoomId(null)
-                setZoomForm({
-                  image_url: 'https://images.unsplash.com/photo-1578632767115-351597cf2477?w=1000&auto=format&fit=crop',
-                  character_name: '',
-                  character_name_ar: '',
-                  aliases: '',
-                  anime_origin: '',
-                  anime_origin_ar: '',
-                  hint: '',
-                  hint_ar: '',
-                  focus_point: '50% 30%',
-                  total_time_seconds: 40,
-                  base_points: 1000,
-                })
-                setShowZoomModal(true)
-              }}
-              className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-500 hover:to-purple-500 text-white font-extrabold text-xs sm:text-sm flex items-center gap-1.5 shadow-lg shadow-pink-600/30"
-            >
-              <Plus size={16} />
-              <span>{isRtl ? 'إضافة شخصية جديدة 🔍' : 'Add Zoom Character 🔍'}</span>
-            </button>
+            <div className="flex items-center gap-2 flex-wrap">
+              <button
+                type="button"
+                onClick={handleResetZoomQuestions}
+                className="px-3.5 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-pink-300 font-bold text-xs sm:text-sm flex items-center gap-1.5 border border-pink-500/20 transition-colors"
+                title={isRtl ? 'استعادة بنك الأسئلة الافتراضي' : 'Reset to Curated Defaults'}
+              >
+                <RefreshCw size={14} />
+                <span>{isRtl ? 'استعادة الافتراضي' : 'Reset Defaults'}</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  setEditingZoomId(null)
+                  setZoomForm({
+                    image_url: 'https://images.unsplash.com/photo-1578632767115-351597cf2477?w=1000&auto=format&fit=crop',
+                    character_name: '',
+                    character_name_ar: '',
+                    aliases: '',
+                    anime_origin: '',
+                    anime_origin_ar: '',
+                    hint: '',
+                    hint_ar: '',
+                    focus_point: '50% 30%',
+                    total_time_seconds: 40,
+                    base_points: 1000,
+                  })
+                  setShowZoomModal(true)
+                }}
+                className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-500 hover:to-purple-500 text-white font-extrabold text-xs sm:text-sm flex items-center gap-1.5 shadow-lg shadow-pink-600/30"
+              >
+                <Plus size={16} />
+                <span>{isRtl ? 'إضافة شخصية جديدة 🔍' : 'Add Zoom Character 🔍'}</span>
+              </button>
+            </div>
           </div>
 
           {/* Questions Grid */}
@@ -1135,7 +1243,7 @@ export default function AdminDashboard({ locale = 'en' }: AdminDashboardProps) {
                         image_url: q.image_url,
                         character_name: q.character_name,
                         character_name_ar: q.character_name_ar,
-                        aliases: q.aliases.join(', '),
+                        aliases: Array.isArray(q.aliases) ? q.aliases.join(', ') : (q.aliases || ''),
                         anime_origin: q.anime_origin,
                         anime_origin_ar: q.anime_origin_ar,
                         hint: q.hint,
@@ -1155,8 +1263,9 @@ export default function AdminDashboard({ locale = 'en' }: AdminDashboardProps) {
                   <button
                     onClick={() => {
                       if (!confirm(isRtl ? 'حذف هذا السؤال من بنك الزووم؟' : 'Delete this zoom question?')) return
-                      setZoomQuestions(prev => prev.filter(item => item.id !== q.id))
-                      showFeedback(isRtl ? 'تم حذف السؤال من بنك الزووم' : 'Question removed from Zoom bank')
+                      const updated = zoomQuestions.filter(item => item.id !== q.id)
+                      saveZoomQuestions(updated)
+                      showFeedback(isRtl ? 'تم حذف السؤال وحفظ التغييرات 🗑️' : 'Question removed & saved 🗑️')
                     }}
                     className="p-1.5 rounded-lg text-red-400 hover:bg-red-500/20 transition-colors"
                     title="Delete"
@@ -1603,11 +1712,13 @@ export default function AdminDashboard({ locale = 'en' }: AdminDashboardProps) {
                 }
 
                 if (editingZoomId) {
-                  setZoomQuestions(prev => prev.map(q => q.id === editingZoomId ? newQuestion : q))
-                  showFeedback(isRtl ? 'تم تحديث السؤال بنجاح! 🔍' : 'Question updated! 🔍')
+                  const updated = zoomQuestions.map(q => q.id === editingZoomId ? newQuestion : q)
+                  saveZoomQuestions(updated)
+                  showFeedback(isRtl ? 'تم تحديث السؤال وحفظ التغييرات بنجاح! 🔍' : 'Question updated and saved! 🔍')
                 } else {
-                  setZoomQuestions(prev => [newQuestion, ...prev])
-                  showFeedback(isRtl ? 'تمت إضافة السؤال لبنك الزووم! 🔍' : 'Zoom question added! 🔍')
+                  const updated = [newQuestion, ...zoomQuestions]
+                  saveZoomQuestions(updated)
+                  showFeedback(isRtl ? 'تمت إضافة السؤال وحفظه في بنك الزووم! 🔍' : 'Zoom question added and saved! 🔍')
                 }
 
                 setShowZoomModal(false)
