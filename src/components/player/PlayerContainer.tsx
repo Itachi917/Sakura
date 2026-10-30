@@ -264,14 +264,15 @@ export default function PlayerContainer({ sessionId, locale = 'en' }: PlayerCont
   const pointsToAhead = aheadParticipant ? Math.max(0, (aheadParticipant.score || 0) - (participant.score || 0)) : 0
   const currentIdx = getQuestionIndex(session)
 
-  const isZoom = session.activity_type === 'zoom_guess' || (session.settings as any)?.game_mode === 'zoom_guess'
-  const isAudio = session.activity_type === 'audio_guess' || (session.settings as any)?.game_mode === 'audio_guess'
-  const isSilhouette = session.activity_type === 'silhouette_guess' || (session.settings as any)?.game_mode === 'silhouette_guess'
-  const isEmoji = session.activity_type === 'emoji_riddle' || (session.settings as any)?.game_mode === 'emoji_riddle'
-  const isLivePoll = session.activity_type === 'live_poll' || (session.settings as any)?.game_mode === 'live_poll'
-  const isDrawIt = session.activity_type === 'draw_it_guess_it' || (session.settings as any)?.game_mode === 'draw_it_guess_it'
-  const isFeud = session.activity_type === 'sakura_feud' || (session.settings as any)?.game_mode === 'sakura_feud'
-  const isQuiz = !isZoom && !isAudio && !isSilhouette && !isEmoji && !isLivePoll && !isDrawIt && !isFeud && ['whos_that_character', 'spacetoon_nostalgia', 'anime_expert_exam'].includes(session.activity_type)
+  const activeMode = (((session.settings as Record<string, unknown>)?.game_mode as string) || session.activity_type) || 'whos_that_character'
+  const isZoom = activeMode === 'zoom_guess'
+  const isAudio = activeMode === 'audio_guess'
+  const isSilhouette = activeMode === 'silhouette_guess'
+  const isEmoji = activeMode === 'emoji_riddle'
+  const isLivePoll = activeMode === 'live_poll'
+  const isDrawIt = activeMode === 'draw_it_guess_it'
+  const isFeud = activeMode === 'sakura_feud'
+  const isQuiz = ['whos_that_character', 'spacetoon_nostalgia', 'anime_expert_exam'].includes(activeMode)
 
   return (
     <div className="min-h-screen text-white flex flex-col justify-between p-4 sm:p-6 relative select-none">
@@ -408,12 +409,11 @@ export default function PlayerContainer({ sessionId, locale = 'en' }: PlayerCont
 
         {/* SILHOUETTE GUESS MODE */}
         {isSilhouette &&
-          ['question_active', 'answer_collection_ended', 'answer_reveal', 'round_results'].includes(session.status) &&
-          silhouetteQuestions[currentIdx] && (
+          ['question_active', 'answer_collection_ended', 'answer_reveal', 'round_results'].includes(session.status) && (
             <PlayerSilhouetteView
               session={session}
               participant={participant}
-              currentQuestion={silhouetteQuestions[currentIdx]}
+              currentQuestion={silhouetteQuestions[currentIdx] || silhouetteQuestions[0]}
               questionIndex={currentIdx}
               totalQuestions={silhouetteQuestions.length}
               locale={locale}
@@ -422,12 +422,11 @@ export default function PlayerContainer({ sessionId, locale = 'en' }: PlayerCont
 
         {/* EMOJI RIDDLE MODE */}
         {isEmoji &&
-          ['question_active', 'answer_collection_ended', 'answer_reveal', 'round_results'].includes(session.status) &&
-          emojiQuestions[currentIdx] && (
+          ['question_active', 'answer_collection_ended', 'answer_reveal', 'round_results'].includes(session.status) && (
             <PlayerEmojiRiddleView
               session={session}
               participant={participant}
-              currentQuestion={emojiQuestions[currentIdx]}
+              currentQuestion={emojiQuestions[currentIdx] || emojiQuestions[0]}
               questionIndex={currentIdx}
               totalQuestions={emojiQuestions.length}
               locale={locale}
@@ -436,12 +435,11 @@ export default function PlayerContainer({ sessionId, locale = 'en' }: PlayerCont
 
         {/* LIVE POLL MODE */}
         {isLivePoll &&
-          ['question_active', 'answer_collection_ended', 'answer_reveal', 'round_results'].includes(session.status) &&
-          pollQuestions[currentIdx] && (
+          ['question_active', 'answer_collection_ended', 'answer_reveal', 'round_results'].includes(session.status) && (
             <PlayerLivePollView
               session={session}
               participant={participant}
-              currentQuestion={pollQuestions[currentIdx]}
+              currentQuestion={pollQuestions[currentIdx] || pollQuestions[0]}
               questionIndex={currentIdx}
               totalQuestions={pollQuestions.length}
               locale={locale}
@@ -450,12 +448,11 @@ export default function PlayerContainer({ sessionId, locale = 'en' }: PlayerCont
 
         {/* AUDIO GUESS MODE */}
         {isAudio &&
-          ['question_active', 'answer_collection_ended', 'answer_reveal', 'round_results'].includes(session.status) &&
-          audioQuestions[currentIdx] && (
+          ['question_active', 'answer_collection_ended', 'answer_reveal', 'round_results'].includes(session.status) && (
             <PlayerAudioGuessView
               session={session}
               participant={participant}
-              currentQuestion={audioQuestions[currentIdx]}
+              currentQuestion={audioQuestions[currentIdx] || audioQuestions[0]}
               questionIndex={currentIdx}
               totalQuestions={audioQuestions.length}
               locale={locale}
@@ -464,12 +461,11 @@ export default function PlayerContainer({ sessionId, locale = 'en' }: PlayerCont
 
         {/* ZOOM & GUESS MODE */}
         {isZoom &&
-          ['question_active', 'answer_collection_ended', 'answer_reveal', 'round_results'].includes(session.status) &&
-          zoomQuestions[currentIdx] && (
+          ['question_active', 'answer_collection_ended', 'answer_reveal', 'round_results'].includes(session.status) && (
             <PlayerZoomGuessView
               session={session}
               participant={participant}
-              currentQuestion={zoomQuestions[currentIdx]}
+              currentQuestion={zoomQuestions[currentIdx] || zoomQuestions[0]}
               questionIndex={currentIdx}
               totalQuestions={zoomQuestions.length}
               locale={locale}

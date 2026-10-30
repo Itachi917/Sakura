@@ -29,6 +29,7 @@ import {
   Upload,
   FileAudio,
   FileImage,
+  Palette,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { sound } from '@/lib/sound'
@@ -41,7 +42,7 @@ import type {
   Quiz,
   QuizQuestion,
 } from '@/types/database'
-import { generateNumericPin } from '@/lib/gameHelpers'
+import { generateNumericPin, shuffleArray, getDrawingWordsForSession, getQuizQuestionsForActivity } from '@/lib/gameHelpers'
 import {
   ZOOM_GUESS_QUESTIONS,
   WHOS_THAT_CHARACTER_QUESTIONS,
@@ -51,6 +52,7 @@ import {
   SILHOUETTE_QUESTIONS,
   EMOJI_RIDDLE_QUESTIONS,
   LIVE_POLL_QUESTIONS,
+  DRAWING_WORDS,
   ANIME_AUDIO_PRESETS,
   type ZoomGuessQuestionData,
   type QuizQuestionData,
@@ -58,6 +60,7 @@ import {
   type SilhouetteQuestionData,
   type EmojiRiddleData,
   type LivePollData,
+  type DrawingWordData,
   type AudioPreset,
 } from '@/lib/gameData'
 import {
@@ -97,7 +100,7 @@ export default function AdminDashboard({ locale = 'en' }: AdminDashboardProps) {
   const isRtl = locale === 'ar'
 
   // Navigation tab
-  const [activeTab, setActiveTab] = useState<'sessions' | 'events' | 'stamps' | 'quizzes' | 'zoom_guess' | 'audio_guess' | 'silhouette_guess' | 'emoji_riddle' | 'live_poll'>('sessions')
+  const [activeTab, setActiveTab] = useState<'sessions' | 'events' | 'stamps' | 'quizzes' | 'zoom_guess' | 'audio_guess' | 'silhouette_guess' | 'emoji_riddle' | 'live_poll' | 'draw_words'>('sessions')
 
   // Global Admin State
   const [loading, setLoading] = useState(true)
@@ -332,6 +335,37 @@ export default function AdminDashboard({ locale = 'en' }: AdminDashboardProps) {
     base_points: 1000,
   })
 
+  // 9. Draw & Guess Words State
+  const [drawingWords, setDrawingWords] = useState<DrawingWordData[]>(() => {
+    return getDrawingWordsForSession()
+  })
+  const [showDrawWordModal, setShowDrawWordModal] = useState(false)
+  const [editingDrawWordId, setEditingDrawWordId] = useState<string | null>(null)
+  const [drawWordForm, setDrawWordForm] = useState({
+    word: '',
+    word_ar: '',
+    category: '',
+    category_ar: '',
+    difficulty: 'easy' as 'easy' | 'medium' | 'hard',
+    aliases: '',
+  })
+
+  // 10. Emoji Riddles Form State
+  const [showEmojiModal, setShowEmojiModal] = useState(false)
+  const [editingEmojiId, setEditingEmojiId] = useState<string | null>(null)
+  const [emojiForm, setEmojiForm] = useState({
+    emojis: '',
+    answer: '',
+    answer_ar: '',
+    anime_origin: '',
+    anime_origin_ar: '',
+    hint: '',
+    hint_ar: '',
+    aliases: '',
+    base_points: 1000,
+    total_time_seconds: 30,
+  })
+
   // Helper feedback timer
   const showFeedback = (text: string, type: 'success' | 'error' = 'success') => {
     setFeedbackMsg({ text, type })
@@ -473,30 +507,31 @@ export default function AdminDashboard({ locale = 'en' }: AdminDashboardProps) {
       }
       if (selectedActivity === 'zoom_guess') {
         settingsPayload.game_mode = 'zoom_guess'
-        settingsPayload.zoom_questions = zoomQuestions
+        settingsPayload.zoom_questions = shuffleArray(zoomQuestions)
       }
       if (selectedActivity === 'silhouette_guess') {
         settingsPayload.game_mode = 'silhouette_guess'
-        settingsPayload.silhouette_questions = silhouetteQuestions
+        settingsPayload.silhouette_questions = shuffleArray(silhouetteQuestions)
       }
       if (selectedActivity === 'emoji_riddle') {
         settingsPayload.game_mode = 'emoji_riddle'
-        settingsPayload.emoji_questions = emojiQuestions
+        settingsPayload.emoji_questions = shuffleArray(emojiQuestions)
       }
       if (selectedActivity === 'live_poll') {
         settingsPayload.game_mode = 'live_poll'
-        settingsPayload.poll_questions = pollQuestions
+        settingsPayload.poll_questions = shuffleArray(pollQuestions)
       }
       if (selectedActivity === 'draw_it_guess_it') {
         settingsPayload.game_mode = 'draw_it_guess_it'
+        settingsPayload.drawing_words = shuffleArray(drawingWords)
         settingsPayload.round_duration = 60
       }
       if (selectedActivity === 'audio_guess') {
         settingsPayload.game_mode = 'audio_guess'
-        settingsPayload.audio_questions = audioQuestions
+        settingsPayload.audio_questions = shuffleArray(audioQuestions)
       }
       if (['whos_that_character', 'spacetoon_nostalgia', 'anime_expert_exam'].includes(selectedActivity)) {
-        settingsPayload.quiz_questions = customQuestions[selectedActivity] || []
+        settingsPayload.quiz_questions = shuffleArray(customQuestions[selectedActivity] || [])
       }
 
       let { data: newSess, error } = await supabase
@@ -1225,6 +1260,231 @@ export default function AdminDashboard({ locale = 'en' }: AdminDashboardProps) {
     }
   }
 
+  // --- Emoji Riddles Handlers ---
+  const handleOpenAddEmoji = () => {
+    setEditingEmojiId(null)
+    setEmojiForm({
+      emojis: '⚡ 🦊 🍜',
+      answer: '',
+      answer_ar: '',
+      anime_origin: '',
+      anime_origin_ar: '',
+      hint: '',
+      hint_ar: '',
+      aliases: '',
+      base_points: 1000,
+      total_time_seconds: 30,
+    })
+    setShowEmojiModal(true)
+  }
+
+  const handleOpenEditEmoji = (item: EmojiRiddleData) => {
+    setEditingEmojiId(item.id)
+    setEmojiForm({
+      emojis: item.emojis,
+      answer: item.answer,
+      answer_ar: item.answer_ar,
+      anime_origin: item.anime_origin,
+      anime_origin_ar: item.anime_origin_ar || '',
+      hint: item.hint,
+      hint_ar: item.hint_ar,
+      aliases: item.aliases ? item.aliases.join(', ') : '',
+      base_points: item.base_points,
+      total_time_seconds: item.total_time_seconds,
+    })
+    setShowEmojiModal(true)
+  }
+
+  const handleSaveEmoji = (e: React.FormEvent) => {
+    e.preventDefault()
+    sound.playClick()
+    const parsedAliases = emojiForm.aliases
+      .split(/[,،]/)
+      .map(a => a.trim())
+      .filter(Boolean)
+
+    let updated: EmojiRiddleData[]
+    if (editingEmojiId) {
+      updated = emojiQuestions.map(item => {
+        if (item.id === editingEmojiId) {
+          return {
+            ...item,
+            emojis: emojiForm.emojis.trim() || item.emojis,
+            answer: emojiForm.answer.trim() || item.answer,
+            answer_ar: emojiForm.answer_ar.trim() || item.answer_ar,
+            anime_origin: emojiForm.anime_origin.trim() || item.anime_origin,
+            anime_origin_ar: emojiForm.anime_origin_ar.trim() || item.anime_origin_ar || 'أنمي',
+            hint: emojiForm.hint.trim() || item.hint,
+            hint_ar: emojiForm.hint_ar.trim() || item.hint_ar,
+            aliases: parsedAliases.length > 0 ? parsedAliases : item.aliases,
+            base_points: Number(emojiForm.base_points) || 1000,
+            total_time_seconds: Number(emojiForm.total_time_seconds) || 30,
+          }
+        }
+        return item
+      })
+    } else {
+      const newItem: EmojiRiddleData = {
+        id: `emoji-${Date.now()}`,
+        emojis: emojiForm.emojis.trim() || '❓',
+        answer: emojiForm.answer.trim(),
+        answer_ar: emojiForm.answer_ar.trim() || emojiForm.answer.trim(),
+        anime_origin: emojiForm.anime_origin.trim(),
+        anime_origin_ar: emojiForm.anime_origin_ar.trim() || emojiForm.anime_origin.trim() || 'أنمي',
+        hint: emojiForm.hint.trim(),
+        hint_ar: emojiForm.hint_ar.trim() || emojiForm.hint.trim(),
+        aliases: parsedAliases,
+        base_points: Number(emojiForm.base_points) || 1000,
+        total_time_seconds: Number(emojiForm.total_time_seconds) || 30,
+      }
+      updated = [...emojiQuestions, newItem]
+    }
+
+    setEmojiQuestions(updated)
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('sakura_emoji_questions', JSON.stringify(updated))
+      } catch (e) {
+        console.warn('Failed to save emoji questions to localStorage:', e)
+      }
+    }
+
+    sound.playCorrect()
+    showFeedback(isRtl ? 'تم حفظ لغز الإيموجي بنجاح! 🎭' : 'Emoji riddle saved successfully! 🎭')
+    setShowEmojiModal(false)
+    setEditingEmojiId(null)
+  }
+
+  const handleDeleteEmoji = (id: string) => {
+    if (!confirm(isRtl ? 'حذف هذا اللغز نهائياً من البنك؟' : 'Delete this emoji riddle permanently?')) return
+    sound.playClick()
+    const updated = emojiQuestions.filter(item => item.id !== id)
+    setEmojiQuestions(updated)
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('sakura_emoji_questions', JSON.stringify(updated))
+      } catch {}
+    }
+    showFeedback(isRtl ? 'تم حذف اللغز' : 'Emoji riddle deleted')
+  }
+
+  const handleResetEmoji = () => {
+    if (!confirm(isRtl ? 'استعادة ألغاز الإيموجي الافتراضية؟ ستفقد التعديلات المخصصة.' : 'Reset to default emoji riddles?')) return
+    sound.playClick()
+    setEmojiQuestions(EMOJI_RIDDLE_QUESTIONS)
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.removeItem('sakura_emoji_questions')
+      } catch {}
+    }
+    showFeedback(isRtl ? 'تمت استعادة الألغاز الافتراضية' : 'Default emoji riddles restored')
+  }
+
+  // --- Draw & Guess Words Handlers ---
+  const handleOpenAddDrawWord = () => {
+    setEditingDrawWordId(null)
+    setDrawWordForm({
+      word: '',
+      word_ar: '',
+      category: 'Anime',
+      category_ar: 'أنمي',
+      difficulty: 'easy',
+      aliases: '',
+    })
+    setShowDrawWordModal(true)
+  }
+
+  const handleOpenEditDrawWord = (item: DrawingWordData) => {
+    setEditingDrawWordId(item.id || item.word)
+    setDrawWordForm({
+      word: item.word,
+      word_ar: item.word_ar,
+      category: item.category,
+      category_ar: item.category_ar,
+      difficulty: item.difficulty,
+      aliases: item.aliases ? item.aliases.join(', ') : '',
+    })
+    setShowDrawWordModal(true)
+  }
+
+  const handleSaveDrawWord = (e: React.FormEvent) => {
+    e.preventDefault()
+    sound.playClick()
+    const parsedAliases = drawWordForm.aliases
+      .split(/[,،]/)
+      .map(a => a.trim())
+      .filter(Boolean)
+
+    let updated: DrawingWordData[]
+    if (editingDrawWordId) {
+      updated = drawingWords.map(item => {
+        if ((item.id && item.id === editingDrawWordId) || item.word === editingDrawWordId) {
+          return {
+            ...item,
+            id: item.id || `draw-${Date.now()}`,
+            word: drawWordForm.word.trim(),
+            word_ar: drawWordForm.word_ar.trim() || drawWordForm.word.trim(),
+            category: drawWordForm.category.trim() || 'Anime',
+            category_ar: drawWordForm.category_ar.trim() || 'أنمي',
+            difficulty: drawWordForm.difficulty,
+            aliases: parsedAliases.length > 0 ? parsedAliases : undefined,
+          }
+        }
+        return item
+      })
+    } else {
+      const newItem: DrawingWordData = {
+        id: `draw-${Date.now()}`,
+        word: drawWordForm.word.trim(),
+        word_ar: drawWordForm.word_ar.trim() || drawWordForm.word.trim(),
+        category: drawWordForm.category.trim() || 'Anime',
+        category_ar: drawWordForm.category_ar.trim() || 'أنمي',
+        difficulty: drawWordForm.difficulty,
+        aliases: parsedAliases.length > 0 ? parsedAliases : undefined,
+      }
+      updated = [...drawingWords, newItem]
+    }
+
+    setDrawingWords(updated)
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('sakura_draw_words', JSON.stringify(updated))
+      } catch (e) {
+        console.warn('Failed to save drawing words to localStorage:', e)
+      }
+    }
+
+    sound.playCorrect()
+    showFeedback(isRtl ? 'تم حفظ كلمة الرسم بنجاح! 🎨' : 'Drawing word saved successfully! 🎨')
+    setShowDrawWordModal(false)
+    setEditingDrawWordId(null)
+  }
+
+  const handleDeleteDrawWord = (idOrWord: string) => {
+    if (!confirm(isRtl ? 'حذف هذه الكلمة من بنك ارسم وخمّن؟' : 'Delete this word from drawing bank?')) return
+    sound.playClick()
+    const updated = drawingWords.filter(item => (item.id !== idOrWord && item.word !== idOrWord))
+    setDrawingWords(updated)
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('sakura_draw_words', JSON.stringify(updated))
+      } catch {}
+    }
+    showFeedback(isRtl ? 'تم حذف الكلمة' : 'Word deleted')
+  }
+
+  const handleResetDrawWords = () => {
+    if (!confirm(isRtl ? 'استعادة بنك كلمات ارسم وخمّن الافتراضية؟' : 'Reset to default drawing words?')) return
+    sound.playClick()
+    setDrawingWords(DRAWING_WORDS)
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.removeItem('sakura_draw_words')
+      } catch {}
+    }
+    showFeedback(isRtl ? 'تمت استعادة الكلمات الافتراضية' : 'Default drawing words restored')
+  }
+
   return (
     <div className="w-full space-y-8 animate-fade-in font-sans">
       {/* Toast Notification Alert */}
@@ -1272,8 +1532,9 @@ export default function AdminDashboard({ locale = 'en' }: AdminDashboardProps) {
         {[
           { id: 'sessions', label: isRtl ? '🎮 الألعاب الحية' : '🎮 Live Games', count: sessions.length },
           { id: 'zoom_guess', label: isRtl ? '🔍 زووم وتخمين' : '🔍 Zoom & Guess', count: zoomQuestions.length },
-          { id: 'silhouette_guess', label: isRtl ? '👤 خمن ظل الشخصية' : '👤 Silhouette Guess', count: silhouetteQuestions.length },
+          { id: 'draw_words', label: isRtl ? '🎨 كلمات ارسم وخمّن' : '🎨 Draw & Guess Words', count: drawingWords.length },
           { id: 'emoji_riddle', label: isRtl ? '🎭 ألغاز الإيموجي' : '🎭 Emoji Riddles', count: emojiQuestions.length },
+          { id: 'silhouette_guess', label: isRtl ? '👤 خمن ظل الشخصية' : '👤 Silhouette Guess', count: silhouetteQuestions.length },
           { id: 'live_poll', label: isRtl ? '📊 استطلاع الرأي' : '📊 Live Polls', count: pollQuestions.length },
           { id: 'audio_guess', label: isRtl ? '🎵 خمّن الأوست والصوت' : '🎵 Audio & OST Guess', count: audioQuestions.length },
           { id: 'quizzes', label: isRtl ? '📚 بنك أسئلة الكويز' : '📚 Quizzes & Questions', count: Object.values(customQuestions).reduce((acc, l) => acc + l.length, 0) },
@@ -2177,21 +2438,23 @@ export default function AdminDashboard({ locale = 'en' }: AdminDashboardProps) {
               </p>
             </div>
 
-            <button
-              onClick={() => {
-                if (!confirm(isRtl ? 'استعادة ألغاز الإيموجي الافتراضية؟' : 'Reset to default emoji riddles?')) return
-                sound.playClick()
-                setEmojiQuestions(EMOJI_RIDDLE_QUESTIONS)
-                try {
-                  localStorage.removeItem('sakura_emoji_questions')
-                } catch {}
-                showFeedback(isRtl ? 'تمت استعادة الألغاز الافتراضية' : 'Default emoji riddles restored')
-              }}
-              className="px-3.5 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-pink-300 font-bold text-xs sm:text-sm flex items-center gap-1.5 border border-pink-500/20 transition-colors"
-            >
-              <RefreshCw size={14} />
-              <span>{isRtl ? 'استعادة الافتراضي' : 'Reset Defaults'}</span>
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleOpenAddEmoji}
+                className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-pink-600 to-rose-600 hover:from-pink-500 text-white font-black text-xs sm:text-sm flex items-center gap-2 shadow-lg shadow-pink-500/25 active:scale-95 transition-all"
+              >
+                <Plus size={16} />
+                <span>{isRtl ? 'إضافة لغز جديد' : 'Add Emoji Riddle'}</span>
+              </button>
+
+              <button
+                onClick={handleResetEmoji}
+                className="px-3.5 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-pink-300 font-bold text-xs sm:text-sm flex items-center gap-1.5 border border-pink-500/20 transition-colors"
+              >
+                <RefreshCw size={14} />
+                <span>{isRtl ? 'استعادة الافتراضي' : 'Reset Defaults'}</span>
+              </button>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -2220,6 +2483,119 @@ export default function AdminDashboard({ locale = 'en' }: AdminDashboardProps) {
                   <div className="text-[11px] text-pink-300/80">
                     💡 <span className="font-bold">{isRtl ? 'تلميح:' : 'Hint:'}</span> {isRtl ? q.hint_ar : q.hint}
                   </div>
+                </div>
+
+                <div className="flex items-center justify-end gap-1.5 pt-2 border-t border-white/5">
+                  <button
+                    onClick={() => handleOpenEditEmoji(q)}
+                    className="p-2 rounded-lg bg-white/5 hover:bg-white/10 text-pink-300 transition-colors"
+                    title={isRtl ? 'تعديل اللغز' : 'Edit Riddle'}
+                  >
+                    <Edit2 size={14} />
+                  </button>
+                  <button
+                    onClick={() => handleDeleteEmoji(q.id)}
+                    className="p-2 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 transition-colors"
+                    title={isRtl ? 'حذف اللغز' : 'Delete Riddle'}
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================ */}
+      {/* TAB: DRAW & GUESS WORDS MANAGEMENT */}
+      {/* ============================================================ */}
+      {activeTab === 'draw_words' && (
+        <div className="space-y-6 animate-fade-in">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div>
+              <h2 className="text-xl font-black text-white flex items-center gap-2">
+                <span>🎨</span>
+                <span>{isRtl ? 'كلمات لعبة ارسم واخمّن (Draw It, Guess It Words)' : 'Draw & Guess Word Bank'}</span>
+              </h2>
+              <p className="text-xs text-pink-200/70 mt-1">
+                {isRtl
+                  ? 'بنك الكلمات المخصصة للرسم والتخمين على غرار Skribbl. يمكنك إضافة شخصيات وأدوات وتصنيفات جديدة.'
+                  : 'Curated drawing words bank for Skribbl-style gameplay with difficulty levels and aliases.'}
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleOpenAddDrawWord}
+                className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-pink-600 to-rose-600 hover:from-pink-500 text-white font-black text-xs sm:text-sm flex items-center gap-2 shadow-lg shadow-pink-500/25 active:scale-95 transition-all"
+              >
+                <Plus size={16} />
+                <span>{isRtl ? 'إضافة كلمة رسم جديدة' : 'Add Drawing Word'}</span>
+              </button>
+
+              <button
+                onClick={handleResetDrawWords}
+                className="px-3.5 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-pink-300 font-bold text-xs sm:text-sm flex items-center gap-1.5 border border-pink-500/20 transition-colors"
+              >
+                <RefreshCw size={14} />
+                <span>{isRtl ? 'استعادة الافتراضي' : 'Reset Defaults'}</span>
+              </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            {drawingWords.map((w, idx) => (
+              <div
+                key={w.id || `${w.word}-${idx}`}
+                className="rounded-3xl bg-black/40 border-2 border-pink-500/20 backdrop-blur-xl p-5 flex flex-col justify-between hover:border-pink-400/40 transition-all shadow-xl space-y-3"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-mono text-pink-400 font-bold">#{idx + 1}</span>
+                  <span
+                    className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase border ${
+                      w.difficulty === 'easy'
+                        ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                        : w.difficulty === 'medium'
+                        ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                        : 'bg-rose-500/20 text-rose-300 border-rose-500/40'
+                    }`}
+                  >
+                    {w.difficulty}
+                  </span>
+                </div>
+
+                <div>
+                  <h4 className="text-lg font-black text-white">
+                    {w.word_ar}
+                  </h4>
+                  <p className="text-xs text-pink-200/70 font-mono">{w.word}</p>
+                  <p className="text-[11px] text-pink-300/80 font-bold mt-1">
+                    🏷️ {isRtl ? w.category_ar : w.category}
+                  </p>
+                </div>
+
+                {w.aliases && w.aliases.length > 0 && (
+                  <div className="text-[10px] text-pink-200/60 bg-white/5 p-2 rounded-xl border border-white/5 truncate">
+                    <span className="font-bold">{isRtl ? 'بدائل:' : 'Aliases:'}</span> {w.aliases.join(', ')}
+                  </div>
+                )}
+
+                <div className="flex items-center justify-end gap-1.5 pt-2 border-t border-white/5">
+                  <button
+                    onClick={() => handleOpenEditDrawWord(w)}
+                    className="p-2 rounded-lg bg-white/5 hover:bg-white/10 text-pink-300 transition-colors"
+                    title={isRtl ? 'تعديل الكلمة' : 'Edit Word'}
+                  >
+                    <Edit2 size={14} />
+                  </button>
+                  <button
+                    onClick={() => handleDeleteDrawWord(w.id || w.word)}
+                    className="p-2 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 transition-colors"
+                    title={isRtl ? 'حذف الكلمة' : 'Delete Word'}
+                  >
+                    <Trash2 size={14} />
+                  </button>
                 </div>
               </div>
             ))}
@@ -3012,8 +3388,305 @@ export default function AdminDashboard({ locale = 'en' }: AdminDashboardProps) {
         </div>
       )}
       {/* ============================================================ */}
-      {/* MODAL 6: ADD / EDIT AUDIO & OST QUESTION */}
+      {/* MODAL 7: ADD / EDIT EMOJI RIDDLE */}
       {/* ============================================================ */}
+      {showEmojiModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md animate-fade-in overflow-y-auto">
+          <div className="w-full max-w-lg bg-[#20102c] border-2 border-pink-500/30 rounded-3xl p-6 sm:p-8 shadow-2xl relative my-8">
+            <h3 className="text-xl font-black text-white mb-2">
+              {editingEmojiId
+                ? (isRtl ? 'تعديل لغز الإيموجي 🎭' : 'Edit Emoji Riddle 🎭')
+                : (isRtl ? 'إضافة لغز إيموجي جديد 🎭' : 'Add New Emoji Riddle 🎭')}
+            </h3>
+            <p className="text-xs text-pink-200/70 mb-4">
+              {isRtl
+                ? 'اختر مجموعة إيموجيز ترمز للأنمي أو الشخصية ليتنافس اللاعبون على فك الشفرة.'
+                : 'Select emojis that depict the anime plot or character for players to guess.'}
+            </p>
+
+            <form onSubmit={handleSaveEmoji} className="space-y-4 text-xs sm:text-sm">
+              <div>
+                <label className="block text-pink-200 font-bold mb-1">
+                  {isRtl ? 'رموز الإيموجي (Emojis)' : 'Emoji Clue String'}
+                </label>
+                <input
+                  type="text"
+                  value={emojiForm.emojis}
+                  onChange={e => setEmojiForm({ ...emojiForm, emojis: e.target.value })}
+                  placeholder="مثال: 🏴‍☠️ 🍖 👒"
+                  className="w-full p-2.5 rounded-xl bg-black/50 border border-pink-400/30 text-white text-xl text-center tracking-widest"
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-pink-200 font-bold mb-1">
+                    {isRtl ? 'الإجابة بالعربية' : 'Answer (Arabic)'}
+                  </label>
+                  <input
+                    type="text"
+                    value={emojiForm.answer_ar}
+                    onChange={e => setEmojiForm({ ...emojiForm, answer_ar: e.target.value })}
+                    placeholder="مثال: ون بيس"
+                    className="w-full p-2 rounded-xl bg-black/50 border border-pink-400/30 text-white"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-pink-200 font-bold mb-1">
+                    {isRtl ? 'الإجابة بالإنجليزية' : 'Answer (English)'}
+                  </label>
+                  <input
+                    type="text"
+                    value={emojiForm.answer}
+                    onChange={e => setEmojiForm({ ...emojiForm, answer: e.target.value })}
+                    placeholder="e.g. One Piece"
+                    className="w-full p-2 rounded-xl bg-black/50 border border-pink-400/30 text-white"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-pink-200 font-bold mb-1">
+                  {isRtl ? 'الأسماء والتهجئات المقبولة (مفصولة بفواصل)' : 'Accepted Aliases (Comma-separated)'}
+                </label>
+                <input
+                  type="text"
+                  value={emojiForm.aliases}
+                  onChange={e => setEmojiForm({ ...emojiForm, aliases: e.target.value })}
+                  placeholder="مثال: One Piece, ون بيس, لوفي"
+                  className="w-full p-2 rounded-xl bg-black/50 border border-pink-400/30 text-white"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-pink-200 font-bold mb-1">
+                    {isRtl ? 'الأنمي / التصنيف (عربي)' : 'Anime / Category (Arabic)'}
+                  </label>
+                  <input
+                    type="text"
+                    value={emojiForm.anime_origin_ar}
+                    onChange={e => setEmojiForm({ ...emojiForm, anime_origin_ar: e.target.value })}
+                    placeholder="مثال: أنمي شونين قراصنة"
+                    className="w-full p-2 rounded-xl bg-black/50 border border-pink-400/30 text-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-pink-200 font-bold mb-1">
+                    {isRtl ? 'الأنمي / التصنيف (إنجليزي)' : 'Anime / Category (English)'}
+                  </label>
+                  <input
+                    type="text"
+                    value={emojiForm.anime_origin}
+                    onChange={e => setEmojiForm({ ...emojiForm, anime_origin: e.target.value })}
+                    placeholder="e.g. Shonen Pirate Anime"
+                    className="w-full p-2 rounded-xl bg-black/50 border border-pink-400/30 text-white"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-pink-200 font-bold mb-1">
+                    {isRtl ? 'التلميح (عربي)' : 'Hint (Arabic)'}
+                  </label>
+                  <input
+                    type="text"
+                    value={emojiForm.hint_ar}
+                    onChange={e => setEmojiForm({ ...emojiForm, hint_ar: e.target.value })}
+                    placeholder="مثال: فتى مطاطي يسعى ليكون ملك القراصنة"
+                    className="w-full p-2 rounded-xl bg-black/50 border border-pink-400/30 text-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-pink-200 font-bold mb-1">
+                    {isRtl ? 'التلميح (إنجليزي)' : 'Hint (English)'}
+                  </label>
+                  <input
+                    type="text"
+                    value={emojiForm.hint}
+                    onChange={e => setEmojiForm({ ...emojiForm, hint: e.target.value })}
+                    placeholder="e.g. Rubber boy seeking pirate king title"
+                    className="w-full p-2 rounded-xl bg-black/50 border border-pink-400/30 text-white"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-pink-200 font-bold mb-1">
+                    {isRtl ? 'النقاط القصوى' : 'Base Points'}
+                  </label>
+                  <input
+                    type="number"
+                    value={emojiForm.base_points}
+                    onChange={e => setEmojiForm({ ...emojiForm, base_points: Number(e.target.value) })}
+                    className="w-full p-2 rounded-xl bg-black/50 border border-pink-400/30 text-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-pink-200 font-bold mb-1">
+                    {isRtl ? 'الوقت بالثواني' : 'Time Limit (Seconds)'}
+                  </label>
+                  <input
+                    type="number"
+                    value={emojiForm.total_time_seconds}
+                    onChange={e => setEmojiForm({ ...emojiForm, total_time_seconds: Number(e.target.value) })}
+                    className="w-full p-2 rounded-xl bg-black/50 border border-pink-400/30 text-white"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-4 border-t border-white/5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowEmojiModal(false)
+                    setEditingEmojiId(null)
+                  }}
+                  className="px-4 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-pink-200 font-bold"
+                >
+                  {isRtl ? 'إلغاء' : 'Cancel'}
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-500 text-white font-extrabold shadow-lg"
+                >
+                  {isRtl ? 'حفظ اللغز' : 'Save Riddle'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================ */}
+      {/* MODAL 8: ADD / EDIT DRAW & GUESS WORD */}
+      {/* ============================================================ */}
+      {showDrawWordModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md animate-fade-in overflow-y-auto">
+          <div className="w-full max-w-md bg-[#20102c] border-2 border-pink-500/30 rounded-3xl p-6 sm:p-8 shadow-2xl relative my-8">
+            <h3 className="text-xl font-black text-white mb-2">
+              {editingDrawWordId
+                ? (isRtl ? 'تعديل كلمة الرسم 🎨' : 'Edit Drawing Word 🎨')
+                : (isRtl ? 'إضافة كلمة رسم جديدة 🎨' : 'Add New Drawing Word 🎨')}
+            </h3>
+            <p className="text-xs text-pink-200/70 mb-4">
+              {isRtl
+                ? 'أدخل الكلمة التي سيقوم المتسابق برسمها وبقية المتسابقين بتخمينها.'
+                : 'Enter the word that the drawer illustrates and contestants decipher.'}
+            </p>
+
+            <form onSubmit={handleSaveDrawWord} className="space-y-4 text-xs sm:text-sm">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-pink-200 font-bold mb-1">
+                    {isRtl ? 'الكلمة بالعربية' : 'Word (Arabic)'}
+                  </label>
+                  <input
+                    type="text"
+                    value={drawWordForm.word_ar}
+                    onChange={e => setDrawWordForm({ ...drawWordForm, word_ar: e.target.value })}
+                    placeholder="مثال: لوفي"
+                    className="w-full p-2.5 rounded-xl bg-black/50 border border-pink-400/30 text-white font-bold"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-pink-200 font-bold mb-1">
+                    {isRtl ? 'الكلمة بالإنجليزية' : 'Word (English)'}
+                  </label>
+                  <input
+                    type="text"
+                    value={drawWordForm.word}
+                    onChange={e => setDrawWordForm({ ...drawWordForm, word: e.target.value })}
+                    placeholder="e.g. Luffy"
+                    className="w-full p-2.5 rounded-xl bg-black/50 border border-pink-400/30 text-white font-bold"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-pink-200 font-bold mb-1">
+                    {isRtl ? 'التصنيف بالعربية' : 'Category (Arabic)'}
+                  </label>
+                  <input
+                    type="text"
+                    value={drawWordForm.category_ar}
+                    onChange={e => setDrawWordForm({ ...drawWordForm, category_ar: e.target.value })}
+                    placeholder="مثال: شخصيات أنمي"
+                    className="w-full p-2 rounded-xl bg-black/50 border border-pink-400/30 text-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-pink-200 font-bold mb-1">
+                    {isRtl ? 'التصنيف بالإنجليزية' : 'Category (English)'}
+                  </label>
+                  <input
+                    type="text"
+                    value={drawWordForm.category}
+                    onChange={e => setDrawWordForm({ ...drawWordForm, category: e.target.value })}
+                    placeholder="e.g. Characters"
+                    className="w-full p-2 rounded-xl bg-black/50 border border-pink-400/30 text-white"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-pink-200 font-bold mb-1">
+                  {isRtl ? 'مستوى الصعوبة' : 'Difficulty'}
+                </label>
+                <select
+                  value={drawWordForm.difficulty}
+                  onChange={e => setDrawWordForm({ ...drawWordForm, difficulty: e.target.value as 'easy' | 'medium' | 'hard' })}
+                  className="w-full p-2.5 rounded-xl bg-black/50 border border-pink-400/30 text-white"
+                >
+                  <option value="easy">{isRtl ? 'سهل (Easy)' : 'Easy'}</option>
+                  <option value="medium">{isRtl ? 'متوسط (Medium)' : 'Medium'}</option>
+                  <option value="hard">{isRtl ? 'صعب (Hard)' : 'Hard'}</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-pink-200 font-bold mb-1">
+                  {isRtl ? 'الأسماء والتهجئات البديلة المقبولة' : 'Accepted Aliases (Comma-separated)'}
+                </label>
+                <input
+                  type="text"
+                  value={drawWordForm.aliases}
+                  onChange={e => setDrawWordForm({ ...drawWordForm, aliases: e.target.value })}
+                  placeholder="مثال: Monkey D Luffy, قبعة القش, Straw Hat"
+                  className="w-full p-2 rounded-xl bg-black/50 border border-pink-400/30 text-white"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-4 border-t border-white/5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowDrawWordModal(false)
+                    setEditingDrawWordId(null)
+                  }}
+                  className="px-4 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-pink-200 font-bold"
+                >
+                  {isRtl ? 'إلغاء' : 'Cancel'}
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-500 text-white font-extrabold shadow-lg"
+                >
+                  {isRtl ? 'حفظ الكلمة' : 'Save Word'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
       {showAudioModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md animate-fade-in overflow-y-auto">
           <div className="w-full max-w-xl bg-[#20102c] border-2 border-pink-500/30 rounded-3xl p-6 sm:p-8 shadow-2xl relative my-8">

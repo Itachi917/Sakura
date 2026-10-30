@@ -242,14 +242,15 @@ export default function ProjectorContainer({ sessionId, locale = 'en' }: Project
     if (nextVal) sound.playClick()
   }
 
-  const isZoom = session?.activity_type === 'zoom_guess' || (session?.settings as any)?.game_mode === 'zoom_guess'
-  const isAudio = session?.activity_type === 'audio_guess' || (session?.settings as any)?.game_mode === 'audio_guess'
-  const isSilhouette = session?.activity_type === 'silhouette_guess' || (session?.settings as any)?.game_mode === 'silhouette_guess'
-  const isEmoji = session?.activity_type === 'emoji_riddle' || (session?.settings as any)?.game_mode === 'emoji_riddle'
-  const isLivePoll = session?.activity_type === 'live_poll' || (session?.settings as any)?.game_mode === 'live_poll'
-  const isFeud = session?.activity_type === 'sakura_feud' || (session?.settings as any)?.game_mode === 'sakura_feud'
-  const isDrawIt = session?.activity_type === 'draw_it_guess_it' || (session?.settings as any)?.game_mode === 'draw_it_guess_it'
-  const isQuiz = !isZoom && !isAudio && !isSilhouette && !isEmoji && !isLivePoll && !isFeud && !isDrawIt && ['whos_that_character', 'spacetoon_nostalgia', 'anime_expert_exam'].includes(session?.activity_type || '')
+  const activeMode = (((session?.settings as Record<string, unknown>)?.game_mode as string) || session?.activity_type) || 'whos_that_character'
+  const isZoom = activeMode === 'zoom_guess'
+  const isAudio = activeMode === 'audio_guess'
+  const isSilhouette = activeMode === 'silhouette_guess'
+  const isEmoji = activeMode === 'emoji_riddle'
+  const isLivePoll = activeMode === 'live_poll'
+  const isFeud = activeMode === 'sakura_feud'
+  const isDrawIt = activeMode === 'draw_it_guess_it'
+  const isQuiz = ['whos_that_character', 'spacetoon_nostalgia', 'anime_expert_exam'].includes(activeMode)
 
   const totalQuestions = isSilhouette
     ? silhouetteQuestions.length
@@ -275,6 +276,7 @@ export default function ProjectorContainer({ sessionId, locale = 'en' }: Project
     sound.playClick()
     try {
       const currentSettings = (session.settings as Record<string, unknown>) || {}
+      const targetMode = ((currentSettings as any)?.game_mode as string) || session.activity_type
       let newSettings: Record<string, unknown>
 
       if (isDrawIt && (newStatus === 'question_active' || typeof newQuestionIndex === 'number')) {
@@ -282,8 +284,8 @@ export default function ProjectorContainer({ sessionId, locale = 'en' }: Project
         newSettings = prepareDrawItRound(session, participants, targetIdx)
       } else {
         newSettings = typeof newQuestionIndex === 'number'
-          ? { ...currentSettings, question_index: newQuestionIndex }
-          : currentSettings
+          ? { ...currentSettings, game_mode: targetMode, question_index: newQuestionIndex }
+          : { ...currentSettings, game_mode: targetMode }
       }
 
       const { data, error } = await supabase

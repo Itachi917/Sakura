@@ -453,15 +453,16 @@ export default function HostControlRoom({ sessionId, locale = 'en' }: HostContro
 
     try {
       const currentSettings = (session?.settings as Record<string, unknown>) || {}
+      const targetMode = ((currentSettings as any)?.game_mode as string) || session?.activity_type || 'whos_that_character'
       let newSettings: Record<string, unknown>
 
-      if (session?.activity_type === 'draw_it_guess_it' && (newStatus === 'question_active' || typeof newQuestionIndex === 'number')) {
+      if ((session?.activity_type === 'draw_it_guess_it' || targetMode === 'draw_it_guess_it') && (newStatus === 'question_active' || typeof newQuestionIndex === 'number')) {
         const targetIdx = typeof newQuestionIndex === 'number' ? newQuestionIndex : currentIndex
         newSettings = prepareDrawItRound(session, participants, targetIdx)
       } else {
         newSettings = typeof newQuestionIndex === 'number'
-          ? { ...currentSettings, question_index: newQuestionIndex }
-          : currentSettings
+          ? { ...currentSettings, game_mode: targetMode, question_index: newQuestionIndex }
+          : { ...currentSettings, game_mode: targetMode }
       }
 
       const updates = {
@@ -598,11 +599,12 @@ export default function HostControlRoom({ sessionId, locale = 'en' }: HostContro
   }
 
   const currentIndex = getQuestionIndex(session)
-  const isZoomGame = session.activity_type === 'zoom_guess' || (session.settings as any)?.game_mode === 'zoom_guess'
-  const isAudioGame = session.activity_type === 'audio_guess' || (session.settings as any)?.game_mode === 'audio_guess'
-  const isSilhouetteGame = session.activity_type === 'silhouette_guess' || (session.settings as any)?.game_mode === 'silhouette_guess'
-  const isEmojiGame = session.activity_type === 'emoji_riddle' || (session.settings as any)?.game_mode === 'emoji_riddle'
-  const isPollGame = session.activity_type === 'live_poll' || (session.settings as any)?.game_mode === 'live_poll'
+  const activeMode = (((session.settings as Record<string, unknown>)?.game_mode as string) || session.activity_type) || 'whos_that_character'
+  const isZoomGame = activeMode === 'zoom_guess'
+  const isAudioGame = activeMode === 'audio_guess'
+  const isSilhouetteGame = activeMode === 'silhouette_guess'
+  const isEmojiGame = activeMode === 'emoji_riddle'
+  const isPollGame = activeMode === 'live_poll'
 
   const totalQuestions =
     (isZoomGame ? zoomQuestions.length : 0) ||

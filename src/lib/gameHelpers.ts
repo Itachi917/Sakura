@@ -15,6 +15,7 @@ import {
   type SilhouetteQuestionData,
   type EmojiRiddleData,
   type LivePollData,
+  type DrawingWordData,
 } from './gameData'
 
 /**
@@ -42,6 +43,19 @@ export function getParticipantAvatar(participant: SessionParticipant | null): st
  */
 export function generateNumericPin(): string {
   return Math.floor(100000 + Math.random() * 900000).toString()
+}
+
+/**
+ * Shuffles an array in random order using Fisher-Yates algorithm.
+ * Guarantees fair permutation with zero duplicates.
+ */
+export function shuffleArray<T>(array: T[]): T[] {
+  const arr = [...array]
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]]
+  }
+  return arr
 }
 
 /**
@@ -80,15 +94,17 @@ export function prepareDrawItRound(
     newDrawnIds = [...newDrawnIds, randomDrawer.id]
   }
 
-  // Pick drawing word
-  const wordIndex = roundIndex % DRAWING_WORDS.length
-  const selectedWord = DRAWING_WORDS[wordIndex]
+  // Pick drawing word from session settings or custom words
+  const words = getDrawingWordsForSession(currentSettings)
+  const wordIndex = roundIndex % (words.length || 1)
+  const selectedWord = words[wordIndex] || DRAWING_WORDS[0]
 
   const roundDuration = 60
   const now = Date.now()
 
   return {
     ...currentSettings,
+    game_mode: 'draw_it_guess_it',
     question_index: roundIndex,
     drawer_id: randomDrawer?.id || null,
     drawer_nickname: randomDrawer?.nickname || 'الرسام',
@@ -298,8 +314,37 @@ export function getLivePollQuestionsForSession(
 }
 
 /**
+ * Loads Draw & Guess words, checking session settings, localStorage, and defaults.
+ */
+export function getDrawingWordsForSession(
+  sessionSettings?: Record<string, unknown> | null
+): DrawingWordData[] {
+  if (sessionSettings) {
+    const customWords = sessionSettings.drawing_words
+    if (Array.isArray(customWords) && customWords.length > 0) {
+      return customWords as DrawingWordData[]
+    }
+  }
+
+  if (typeof window !== 'undefined') {
+    try {
+      const saved = localStorage.getItem('sakura_draw_words')
+      if (saved) {
+        const parsed = JSON.parse(saved)
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed as DrawingWordData[]
+        }
+      }
+    } catch {}
+  }
+
+  return DRAWING_WORDS
+}
+
+/**
  * Seamlessly transitions an existing live session to a new game mode
  * WITHOUT regenerating room PIN or kicking connected participants!
+ * All questions are fairly shuffled using Fisher-Yates to prevent repeats.
  */
 export function prepareGameSwitchSettings(
   targetActivity: ActivityType | string,
@@ -317,20 +362,21 @@ export function prepareGameSwitchSettings(
   }
 
   if (targetActivity === 'audio_guess') {
-    baseSettings.audio_questions = getAudioQuestionsForSession(currentSettings)
+    baseSettings.audio_questions = shuffleArray(getAudioQuestionsForSession(currentSettings))
   } else if (targetActivity === 'zoom_guess') {
-    baseSettings.zoom_questions = getZoomQuestionsForSession(currentSettings)
+    baseSettings.zoom_questions = shuffleArray(getZoomQuestionsForSession(currentSettings))
   } else if (targetActivity === 'silhouette_guess') {
-    baseSettings.silhouette_questions = getSilhouetteQuestionsForSession(currentSettings)
+    baseSettings.silhouette_questions = shuffleArray(getSilhouetteQuestionsForSession(currentSettings))
   } else if (targetActivity === 'emoji_riddle') {
-    baseSettings.emoji_questions = getEmojiRiddleQuestionsForSession(currentSettings)
+    baseSettings.emoji_questions = shuffleArray(getEmojiRiddleQuestionsForSession(currentSettings))
   } else if (targetActivity === 'live_poll') {
-    baseSettings.poll_questions = getLivePollQuestionsForSession(currentSettings)
+    baseSettings.poll_questions = shuffleArray(getLivePollQuestionsForSession(currentSettings))
     baseSettings.poll_votes = {}
   } else if (targetActivity === 'draw_it_guess_it') {
+    baseSettings.drawing_words = shuffleArray(getDrawingWordsForSession(currentSettings))
     baseSettings.round_duration = 60
   } else if (['whos_that_character', 'spacetoon_nostalgia', 'anime_expert_exam'].includes(targetActivity)) {
-    baseSettings.quiz_questions = getQuizQuestionsForActivity(targetActivity, currentSettings)
+    baseSettings.quiz_questions = shuffleArray(getQuizQuestionsForActivity(targetActivity, currentSettings))
   }
 
   return {

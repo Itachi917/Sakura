@@ -39,6 +39,7 @@ export interface FeudQuestionData {
 }
 
 export interface DrawingWordData {
+  id?: string
   word: string
   word_ar: string
   category: string
