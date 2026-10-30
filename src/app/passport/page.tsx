@@ -16,7 +16,7 @@ export default async function PassportPage() {
   return (
     <div className="min-h-screen text-white flex flex-col justify-between">
       <Navbar locale={locale} />
-      <main className="flex-1 w-full max-w-5xl self-center px-4 sm:px-6 pb-16" style={{ paddingTop: '7rem' }}>
+      <main className="flex-1 w-full max-w-6xl xl:max-w-7xl self-center px-4 sm:px-8 pb-16" style={{ paddingTop: '7rem' }}>
         <PassportBooklet locale={locale} />
       </main>
       <Footer locale={locale} />

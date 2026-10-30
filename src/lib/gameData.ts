@@ -361,6 +361,16 @@ export const DRAWING_WORDS: DrawingWordData[] = [
 // ------------------------------------------------------------
 export const DEFAULT_STAMPS = [
   {
+    id: 'stamp-fresh-leaf',
+    name: 'Fresh Leaf',
+    name_ar: 'الورقة الغضة 🍃',
+    description: 'Awarded to everyone who has an account logged in to Sakura.',
+    description_ar: 'تُمنح لكل عضو أنشأ حساباً وسجّل دخوله في منصة ساكورا.',
+    icon_name: 'leaf',
+    rarity: 'common' as const,
+    unlock_type: 'manual' as const,
+  },
+  {
     id: 'stamp-first-bloom',
     name: 'First Bloom',
     name_ar: 'أول تفتح 🌸',

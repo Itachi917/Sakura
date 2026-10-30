@@ -761,6 +761,17 @@ CREATE POLICY "audit_log_insert_all" ON public.admin_audit_log FOR INSERT WITH C
 INSERT INTO public.passport_stamps (slug, name, name_ar, description, description_ar, icon_url, rarity, unlock_type, unlock_config)
 VALUES
   (
+    'stamp-fresh-leaf',
+    'Fresh Leaf 🍃',
+    'الورقة الغضة',
+    'Given to everyone who has an account logged in to Sakura.',
+    'تُمنح لكل عضو أنشأ حساباً وسجّل دخوله في منصة ساكورا.',
+    '🍃',
+    'common',
+    'manual',
+    '{}'
+  ),
+  (
     'stamp-first-bloom',
     'First Bloom 🌸',
     'الزهرة الأولى',

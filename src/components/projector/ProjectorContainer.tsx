@@ -44,12 +44,30 @@ export default function ProjectorContainer({ sessionId, locale = 'en' }: Project
     strikes: number
     revealedAnswerIndices: number[]
     activeTeam: 1 | 2 | null
+    roundBank: number
+    faceoff: {
+      rep1Id: string
+      rep1Name: string
+      rep2Id: string
+      rep2Name: string
+      winnerId?: string
+      winnerName?: string
+      winnerTeam?: 1 | 2
+      slowerId?: string
+      slowerName?: string
+    } | null
+    isSteal: boolean
+    participantTeams: Record<string, 'team1' | 'team2'>
   }>({
     team1Score: 0,
     team2Score: 0,
     strikes: 0,
     revealedAnswerIndices: [],
     activeTeam: null,
+    roundBank: 0,
+    faceoff: null,
+    isSteal: false,
+    participantTeams: {},
   })
 
   // Fullscreen toggle handler
@@ -176,20 +194,64 @@ export default function ProjectorContainer({ sessionId, locale = 'en' }: Project
           fetchLatestParticipants()
         }
       )
-      // Listen to custom Realtime broadcast events (strikes, buzzers, reveals)
+      // Listen to custom Realtime broadcast events (strikes, buzzers, reveals, faceoffs, steals)
       .on('broadcast', { event: 'feud_event' }, payload => {
         const { type, data } = payload.payload
         if (type === 'strike') {
           sound.playStrike()
-          setFeudRoundState(prev => ({ ...prev, strikes: (prev.strikes + 1) % 4 }))
+          setFeudRoundState(prev => ({
+            ...prev,
+            strikes: data.strikes,
+            isSteal: data.strikes === 3,
+          }))
         } else if (type === 'reveal_answer') {
           sound.playReveal()
           setFeudRoundState(prev => ({
             ...prev,
             revealedAnswerIndices: [...prev.revealedAnswerIndices, data.index],
+            roundBank: typeof data.newBank === 'number' ? data.newBank : prev.roundBank,
           }))
-        } else if (type === 'buzzer') {
-          sound.playBuzzer()
+        } else if (type === 'faceoff_start') {
+          sound.playClick()
+          setFeudRoundState(prev => ({
+            ...prev,
+            faceoff: data,
+            strikes: 0,
+            revealedAnswerIndices: [],
+            isSteal: false,
+          }))
+        } else if (type === 'buzzer_result') {
+          sound.playFanfare()
+          setFeudRoundState(prev => ({
+            ...prev,
+            faceoff: prev.faceoff ? { ...prev.faceoff, ...data } : data,
+          }))
+        } else if (type === 'set_active_team') {
+          sound.playClick()
+          setFeudRoundState(prev => ({
+            ...prev,
+            activeTeam: data.activeTeam,
+          }))
+        } else if (type === 'round_awarded') {
+          sound.playFanfare()
+          setFeudRoundState(prev => ({
+            ...prev,
+            team1Score: data.team1Score,
+            team2Score: data.team2Score,
+            strikes: 0,
+            roundBank: 0,
+            revealedAnswerIndices: [],
+            faceoff: null,
+            isSteal: false,
+          }))
+        } else if (type === 'team_switch' || type === 'host_move_team') {
+          setFeudRoundState(prev => ({
+            ...prev,
+            participantTeams: {
+              ...prev.participantTeams,
+              [data.participantId]: data.team,
+            },
+          }))
         } else if (type === 'update_scores') {
           setFeudRoundState(prev => ({
             ...prev,

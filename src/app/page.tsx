@@ -79,59 +79,117 @@ export default async function HomePage() {
           <div aria-hidden="true" className="absolute bottom-1/4 -left-32 w-80 h-80 rounded-full" style={{ background: 'radial-gradient(circle, rgba(185,161,200,0.12) 0%, transparent 70%)' }} />
 
           <div className="container-sakura relative z-10 pt-24 pb-16">
-            <div className="max-w-3xl">
-              {liveSession && (
-                <div className="animate-fade-in mb-6">
-                  <LiveSessionBanner session={liveSession} locale={locale} />
-                </div>
-              )}
-
-              <div className="flex items-center gap-2 mb-6 animate-slide-in-left">
-                <Cherry size={18} className="text-[var(--sakura-pink)]" aria-hidden="true" />
-                <span className="text-[var(--sakura-pink)] text-sm font-semibold tracking-widest uppercase">
-                  {isRtl ? 'نادي الثقافة اليابانية' : 'Japanese Culture Club'}
-                </span>
-              </div>
-
-              <h1 className="text-white mb-6 animate-fade-in" style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(2.5rem, 6vw, 4.5rem)', lineHeight: 1.1, letterSpacing: '-0.02em', animationDelay: '100ms' }}>
-                {isRtl ? (
-                  <>عالم يجمع <span className="text-gradient-sakura">الأنمي</span> والثقافة اليابانية</>
-                ) : (
-                  <>Where <span className="text-gradient-sakura">Anime</span> Meets Japanese Culture.</>
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-center">
+              {/* Left Column: Hero Content */}
+              <div className="lg:col-span-7">
+                {liveSession && (
+                  <div className="animate-fade-in mb-6">
+                    <LiveSessionBanner session={liveSession} locale={locale} />
+                  </div>
                 )}
-              </h1>
 
-              <p className="text-[var(--muted-lavender)] text-lg mb-10 max-w-xl animate-fade-in leading-relaxed" style={{ animationDelay: '200ms' }}>
-                {isRtl
-                  ? 'ساكورا تُحيي فعاليات النادي — مسابقات مباشرة، تحديات جماعية، وجواز سفر رقمي تجمع فيه ذكرياتك.'
-                  : 'Sakura brings club events to life — live quizzes, team challenges, and a collectible digital passport that grows with every event.'}
-              </p>
+                <div className="flex items-center gap-2 mb-6 animate-slide-in-left">
+                  <Cherry size={18} className="text-[var(--sakura-pink)]" aria-hidden="true" />
+                  <span className="text-[var(--sakura-pink)] text-sm font-semibold tracking-widest uppercase">
+                    {isRtl ? 'نادي الثقافة اليابانية' : 'Japanese Culture Club'}
+                  </span>
+                </div>
 
-              <div className="flex flex-wrap gap-4 animate-fade-in" style={{ animationDelay: '300ms' }}>
-                <Link href="/join" className="btn btn-primary btn-xl group" id="hero-join-cta">
-                  <Play size={18} aria-hidden="true" />
-                  {isRtl ? 'انضم إلى لعبة مباشرة' : 'Join a Live Game'}
-                  <ArrowRight size={16} aria-hidden="true" className="group-hover:translate-x-1 transition-transform" />
-                </Link>
-                <Link href="#activities" className="btn btn-dark btn-xl" id="hero-explore-cta">
-                  {isRtl ? 'اكتشف ساكورا' : 'Explore Sakura'}
-                </Link>
+                <h1 className="text-white mb-6 animate-fade-in" style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(2.5rem, 5.5vw, 4.5rem)', lineHeight: 1.1, letterSpacing: '-0.02em', animationDelay: '100ms' }}>
+                  {isRtl ? (
+                    <>عالم يجمع <span className="text-gradient-sakura">الأنمي</span> والثقافة اليابانية</>
+                  ) : (
+                    <>Where <span className="text-gradient-sakura">Anime</span> Meets Japanese Culture.</>
+                  )}
+                </h1>
+
+                <p className="text-[var(--muted-lavender)] text-base sm:text-lg mb-10 max-w-xl animate-fade-in leading-relaxed" style={{ animationDelay: '200ms' }}>
+                  {isRtl
+                    ? 'ساكورا تُحيي فعاليات النادي — مسابقات مباشرة، تحديات جماعية، وجواز سفر رقمي تجمع فيه ذكرياتك وأختامك.'
+                    : 'Sakura brings club events to life — live quizzes, team challenges, and a collectible digital passport that grows with every event.'}
+                </p>
+
+                <div className="flex flex-wrap gap-4 animate-fade-in" style={{ animationDelay: '300ms' }}>
+                  <Link href="/join" className="btn btn-primary btn-xl group shadow-lg shadow-pink-500/25" id="hero-join-cta">
+                    <Play size={18} aria-hidden="true" />
+                    {isRtl ? 'انضم إلى لعبة مباشرة' : 'Join a Live Game'}
+                    <ArrowRight size={16} aria-hidden="true" className="group-hover:translate-x-1 transition-transform" />
+                  </Link>
+                  <Link href="#activities" className="btn btn-dark btn-xl" id="hero-explore-cta">
+                    {isRtl ? 'اكتشف ساكورا' : 'Explore Sakura'}
+                  </Link>
+                </div>
+
+                <div className="flex flex-wrap gap-8 mt-12 animate-fade-in" style={{ animationDelay: '400ms' }}>
+                  {[
+                    { icon: <Users size={18} />, label: isRtl ? 'مشترك' : 'Members', value: '200+' },
+                    { icon: <Star size={18} />, label: isRtl ? 'فعالية' : 'Events', value: '12+' },
+                    { icon: <Award size={18} />, label: isRtl ? 'ختم' : 'Stamps Earned', value: '500+' },
+                  ].map(stat => (
+                    <div key={stat.label} className="flex items-center gap-3">
+                      <div className="text-[var(--sakura-pink)]">{stat.icon}</div>
+                      <div>
+                        <div className="text-white font-bold text-xl leading-none">{stat.value}</div>
+                        <div className="text-[var(--muted-text)] text-xs mt-0.5">{stat.label}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
 
-              <div className="flex flex-wrap gap-8 mt-14 animate-fade-in" style={{ animationDelay: '400ms' }}>
-                {[
-                  { icon: <Users size={18} />, label: isRtl ? 'مشترك' : 'Members', value: '200+' },
-                  { icon: <Star size={18} />, label: isRtl ? 'فعالية' : 'Events', value: '12+' },
-                  { icon: <Award size={18} />, label: isRtl ? 'ختم' : 'Stamps Earned', value: '500+' },
-                ].map(stat => (
-                  <div key={stat.label} className="flex items-center gap-3">
-                    <div className="text-[var(--sakura-pink)]">{stat.icon}</div>
-                    <div>
-                      <div className="text-white font-bold text-xl leading-none">{stat.value}</div>
-                      <div className="text-[var(--muted-text)] text-xs mt-0.5">{stat.label}</div>
+              {/* Right Column: Desktop PC Club Showcase Card */}
+              <div className="hidden lg:flex lg:col-span-5 flex-col items-center justify-center relative animate-fade-in" style={{ animationDelay: '200ms' }}>
+                {/* Background Ambient Glow */}
+                <div
+                  aria-hidden="true"
+                  className="absolute w-72 h-72 rounded-full bg-gradient-to-tr from-pink-500/25 to-purple-600/30 blur-3xl pointer-events-none"
+                />
+
+                {/* Deluxe Floating Card */}
+                <div className="relative w-full max-w-sm rounded-3xl bg-gradient-to-b from-[#241334]/90 via-[#1e0e2d]/95 to-[#160a22]/95 border-2 border-pink-400/35 p-7 shadow-2xl backdrop-blur-2xl hover:border-pink-300/60 transition-all duration-300 hover:scale-[1.02]">
+                  <div className="flex items-center justify-between pb-3.5 border-b border-pink-500/20 mb-5">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping" />
+                      <span className="text-xs font-black uppercase tracking-wider text-pink-300">
+                        Sakura Live Hub
+                      </span>
+                    </div>
+                    <span className="text-[10px] font-mono font-bold px-2.5 py-0.5 rounded-full bg-pink-500/20 border border-pink-400/30 text-pink-200">
+                      IAU CLUB
+                    </span>
+                  </div>
+
+                  {/* Central Circular Emblem */}
+                  <div className="w-32 h-32 mx-auto rounded-3xl overflow-hidden border-2 border-pink-300/50 shadow-2xl shadow-pink-500/30 mb-5 group hover:rotate-3 transition-transform duration-300">
+                    <img src="/logo.png" alt="Sakura Club Crest" className="w-full h-full object-cover" />
+                  </div>
+
+                  <div className="text-center mb-5">
+                    <h3 className="text-xl font-black text-white">
+                      {isRtl ? 'نادي الساكورا للثقافة اليابانية' : 'Sakura Anime & Culture'}
+                    </h3>
+                    <p className="text-xs text-pink-200/70 mt-1">
+                      {isRtl
+                        ? 'جامعة الإمام عبدالرحمن بن فيصل • منصة تفاعلية'
+                        : 'Imam Abdulrahman Bin Faisal University'}
+                    </p>
+                  </div>
+
+                  {/* Free Welcome Stamp Callout */}
+                  <div className="p-3.5 rounded-2xl bg-gradient-to-r from-emerald-950/50 via-teal-950/40 to-emerald-950/50 border border-emerald-400/40 flex items-center gap-3 shadow-inner">
+                    <div className="w-11 h-11 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-400 border border-emerald-200 flex items-center justify-center text-2xl shrink-0 shadow-lg shadow-emerald-500/30">
+                      🍃
+                    </div>
+                    <div className="min-w-0 text-start">
+                      <div className="text-[10px] font-black uppercase text-emerald-300 tracking-wider">
+                        {isRtl ? 'ختم ترحيبي لكل مسجّل' : 'Welcome Stamp For All'}
+                      </div>
+                      <div className="text-xs font-bold text-white truncate">
+                        {isRtl ? 'ختم الورقة الغضة (Fresh Leaf 🍃)' : 'Fresh Leaf Stamp 🍃'}
+                      </div>
                     </div>
                   </div>
-                ))}
+                </div>
               </div>
             </div>
           </div>

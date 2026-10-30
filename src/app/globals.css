@@ -117,11 +117,27 @@ body {
 
 .container-sakura {
   width: 100%;
-  max-width: 1200px;
+  max-width: 1240px;
   margin-left: auto;
   margin-right: auto;
   padding-left: 1.5rem;
   padding-right: 1.5rem;
+}
+
+@media (min-width: 1024px) {
+  .container-sakura {
+    max-width: 1340px;
+    padding-left: 2.5rem;
+    padding-right: 2.5rem;
+  }
+}
+
+@media (min-width: 1536px) {
+  .container-sakura {
+    max-width: 1480px;
+    padding-left: 3.5rem;
+    padding-right: 3.5rem;
+  }
 }
 
 .section {
@@ -135,6 +151,32 @@ body {
   .section {
     padding-top: 6.5rem;
     padding-bottom: 6.5rem;
+  }
+}
+
+@media (min-width: 1280px) {
+  .section {
+    padding-top: 7.5rem;
+    padding-bottom: 7.5rem;
+  }
+}
+
+/* Deluxe Desktop PC Scrollbar */
+@media (min-width: 768px) {
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: #14081c;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: linear-gradient(180deg, rgba(244, 167, 197, 0.3) 0%, rgba(229, 106, 159, 0.2) 100%);
+    border-radius: 9999px;
+    border: 2px solid #14081c;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(180deg, rgba(244, 167, 197, 0.55) 0%, rgba(229, 106, 159, 0.45) 100%);
   }
 }
 
