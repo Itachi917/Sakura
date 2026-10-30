@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import {
@@ -26,6 +26,9 @@ import {
   Send,
   RefreshCw,
   Clock,
+  Upload,
+  FileAudio,
+  FileImage,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { sound } from '@/lib/sound'
@@ -45,9 +48,11 @@ import {
   SPACETOON_NOSTALGIA_QUESTIONS,
   ANIME_EXPERT_EXAM_QUESTIONS,
   AUDIO_GUESS_QUESTIONS,
+  ANIME_AUDIO_PRESETS,
   type ZoomGuessQuestionData,
   type QuizQuestionData,
   type AudioGuessQuestionData,
+  type AudioPreset,
 } from '@/lib/gameData'
 import {
   Music,
@@ -231,6 +236,12 @@ export default function AdminDashboard({ locale = 'en' }: AdminDashboardProps) {
     optD_text_ar: '',
     correctIndex: 0,
   })
+  const [isUploadingAudio, setIsUploadingAudio] = useState(false)
+  const [audioUploadFileName, setAudioUploadFileName] = useState<string>('')
+  const audioInputRef = useRef<HTMLInputElement>(null)
+  const audioCoverInputRef = useRef<HTMLInputElement>(null)
+  const zoomImageInputRef = useRef<HTMLInputElement>(null)
+  const quizMediaInputRef = useRef<HTMLInputElement>(null)
 
   // 5. Zoom & Guess Questions State (Persisted in localStorage & Supabase)
   const [zoomQuestions, setZoomQuestions] = useState<ZoomGuessQuestionData[]>(() => {
@@ -967,6 +978,129 @@ export default function AdminDashboard({ locale = 'en' }: AdminDashboardProps) {
       localStorage.removeItem('sakura_audio_guess_questions')
     } catch {}
     showFeedback(isRtl ? 'تمت استعادة المقاطع الافتراضية' : 'Default audio tracks restored')
+  }
+
+  const handleAudioFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    setIsUploadingAudio(true)
+    setAudioUploadFileName(file.name)
+
+    // Attempt Supabase storage first if bucket exists
+    try {
+      const ext = file.name.split('.').pop() || 'mp3'
+      const filePath = `audio_${Date.now()}_${Math.random().toString(36).substring(2, 6)}.${ext}`
+      const { data: uploadRes, error: uploadErr } = await supabase.storage
+        .from('game-assets')
+        .upload(filePath, file, { upsert: true })
+
+      if (!uploadErr && uploadRes?.path) {
+        const { data: pub } = supabase.storage.from('game-assets').getPublicUrl(uploadRes.path)
+        if (pub?.publicUrl) {
+          setAudioForm(prev => ({ ...prev, audio_url: pub.publicUrl }))
+          setIsUploadingAudio(false)
+          showFeedback(isRtl ? 'تم رفع الملف الصوتي بنجاح! 🎵' : 'Audio file uploaded! 🎵')
+          return
+        }
+      }
+    } catch {
+      // Fallback to FileReader
+    }
+
+    const reader = new FileReader()
+    reader.onload = (event) => {
+      const dataUrl = event.target?.result as string
+      if (dataUrl) {
+        setAudioForm(prev => ({ ...prev, audio_url: dataUrl }))
+        showFeedback(isRtl ? 'تم تحميل الملف الصوتي وجاهز للاختبار! 🎵' : 'Audio file loaded and ready! 🎵')
+      }
+      setIsUploadingAudio(false)
+    }
+    reader.onerror = () => {
+      setIsUploadingAudio(false)
+      alert(isRtl ? 'حدث خطأ أثناء قراءة الملف' : 'Error reading file')
+    }
+    reader.readAsDataURL(file)
+  }
+
+  const handleApplyAudioPreset = (preset: AudioPreset) => {
+    sound.playClick()
+    const optA = preset.options[0] || { text: '', text_ar: '' }
+    const optB = preset.options[1] || { text: '', text_ar: '' }
+    const optC = preset.options[2] || { text: '', text_ar: '' }
+    const optD = preset.options[3] || { text: '', text_ar: '' }
+    const correctIdx = preset.options.findIndex(o => o.is_correct)
+
+    setAudioForm({
+      title: `Guess the anime from this theme song!`,
+      title_ar: `خمّن الأنمي الشهير من لحن الشارة الأيقونية!`,
+      audio_url: preset.audio_url,
+      answer: preset.answer,
+      answer_ar: preset.answer_ar,
+      aliases: preset.aliases.join(', '),
+      anime_origin: preset.anime_origin,
+      anime_origin_ar: preset.anime_origin_ar,
+      hint: preset.hint,
+      hint_ar: preset.hint_ar,
+      image_url: preset.image_url,
+      total_time_seconds: 30,
+      base_points: 1000,
+      hasOptions: true,
+      optA_text: optA.text,
+      optA_text_ar: optA.text_ar,
+      optB_text: optB.text,
+      optB_text_ar: optB.text_ar,
+      optC_text: optC.text,
+      optC_text_ar: optC.text_ar,
+      optD_text: optD.text,
+      optD_text_ar: optD.text_ar,
+      correctIndex: correctIdx >= 0 ? correctIdx : 0,
+    })
+    setAudioUploadFileName('')
+    showFeedback(isRtl ? `تم تطبيق قالب: ${preset.name_ar} ✨` : `Applied preset: ${preset.name} ✨`)
+  }
+
+  const handleAudioCoverUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = (event) => {
+      const dataUrl = event.target?.result as string
+      if (dataUrl) {
+        setAudioForm(prev => ({ ...prev, image_url: dataUrl }))
+        showFeedback(isRtl ? 'تم تحميل صورة الغلاف بنجاح 🖼️' : 'Cover image loaded 🖼️')
+      }
+    }
+    reader.readAsDataURL(file)
+  }
+
+  const handleZoomImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = (event) => {
+      const dataUrl = event.target?.result as string
+      if (dataUrl) {
+        setZoomForm(prev => ({ ...prev, image_url: dataUrl }))
+        showFeedback(isRtl ? 'تم تحميل صورة الشخصية بنجاح 🖼️' : 'Character image loaded 🖼️')
+      }
+    }
+    reader.readAsDataURL(file)
+  }
+
+  const handleQuizMediaUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = (event) => {
+      const dataUrl = event.target?.result as string
+      if (dataUrl) {
+        setQuestionForm(prev => ({ ...prev, media_url: dataUrl }))
+        showFeedback(isRtl ? 'تم تحميل صورة السؤال بنجاح 🖼️' : 'Question image loaded 🖼️')
+      }
+    }
+    reader.readAsDataURL(file)
   }
 
   const handleSaveQuestion = async (e: React.FormEvent) => {
@@ -2202,16 +2336,38 @@ export default function AdminDashboard({ locale = 'en' }: AdminDashboardProps) {
               </div>
 
               <div>
-                <label className="block text-pink-200 font-bold mb-1">
-                  {isRtl ? 'رابط الصورة التوضيحية (اختياري)' : 'Image / Media URL (Optional)'}
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-pink-200 font-bold">
+                    {isRtl ? 'الصورة التوضيحية للسؤال (اختياري)' : 'Question Image / Media (Optional)'}
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => quizMediaInputRef.current?.click()}
+                    className="text-[11px] text-pink-300 hover:text-pink-100 font-bold flex items-center gap-1 px-2 py-0.5 rounded-lg bg-pink-500/20 border border-pink-400/30"
+                  >
+                    <Upload className="w-3 h-3" />
+                    {isRtl ? '📁 رفع صورة من جهازك' : '📁 Upload Image'}
+                  </button>
+                  <input
+                    ref={quizMediaInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleQuizMediaUpload}
+                    className="hidden"
+                  />
+                </div>
                 <input
-                  type="url"
+                  type="text"
                   value={questionForm.media_url}
                   onChange={e => setQuestionForm({ ...questionForm, media_url: e.target.value })}
                   placeholder="https://..."
-                  className="w-full p-2 rounded-xl bg-black/50 border border-pink-400/30 text-white"
+                  className="w-full p-2 rounded-xl bg-black/50 border border-pink-400/30 text-white font-mono text-xs"
                 />
+                {questionForm.media_url && (
+                  <div className="mt-1.5 w-full h-24 rounded-xl overflow-hidden border border-pink-400/30 bg-black flex items-center justify-center">
+                    <img src={questionForm.media_url} alt="Question media preview" className="w-full h-full object-cover" />
+                  </div>
+                )}
               </div>
 
               {/* 4 CHOICES */}
@@ -2381,11 +2537,28 @@ export default function AdminDashboard({ locale = 'en' }: AdminDashboardProps) {
             >
               {/* Image URL & Live Preview */}
               <div>
-                <label className="block text-pink-200 font-bold mb-1">
-                  {isRtl ? 'رابط صورة الشخصية (URL)' : 'Character Image URL'}
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-pink-200 font-bold">
+                    {isRtl ? 'صورة الشخصية (رابط مباشر أو رفع من الجهاز)' : 'Character Image (URL or Upload)'}
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => zoomImageInputRef.current?.click()}
+                    className="text-[11px] text-pink-300 hover:text-pink-100 font-bold flex items-center gap-1 px-2 py-0.5 rounded-lg bg-pink-500/20 border border-pink-400/30"
+                  >
+                    <Upload className="w-3 h-3" />
+                    {isRtl ? '📁 رفع صورة من جهازك' : '📁 Upload Image'}
+                  </button>
+                  <input
+                    ref={zoomImageInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleZoomImageUpload}
+                    className="hidden"
+                  />
+                </div>
                 <input
-                  type="url"
+                  type="text"
                   value={zoomForm.image_url}
                   onChange={e => setZoomForm({ ...zoomForm, image_url: e.target.value })}
                   placeholder="https://example.com/character.jpg"
@@ -2573,26 +2746,87 @@ export default function AdminDashboard({ locale = 'en' }: AdminDashboardProps) {
             </h3>
             <p className="text-xs text-pink-200/70 mb-4">
               {isRtl
-                ? 'أدخل رابط المقطع الصوتي والإجابة الصحيحة مع أسماء الأنمي المقبولة'
-                : 'Enter audio URL, anime answer, and accepted aliases'}
+                ? 'ارفع ملف صوتي مباشرة (MP3/WAV/M4A) أو اختر قالباً جاهزاً أو الصق رابطاً'
+                : 'Upload audio directly (MP3/WAV/M4A), pick a preset, or paste a link'}
             </p>
+
+            {/* 1-Click Anime Presets */}
+            <div className="mb-4 p-3 rounded-2xl bg-black/40 border border-pink-500/20">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[11px] font-black text-pink-300 flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-pink-400 animate-pulse" />
+                  {isRtl ? '✨ اختر قالباً جاهزاً بضغطة زر:' : '✨ Pick an anime preset:'}
+                </span>
+                <span className="text-[10px] text-pink-200/50">
+                  {isRtl ? 'يملأ الصوت والبيانات تلقائياً' : 'Auto-fills audio & info'}
+                </span>
+              </div>
+              <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto pr-1">
+                {ANIME_AUDIO_PRESETS.map((p, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => handleApplyAudioPreset(p)}
+                    className="text-[10px] font-bold px-2.5 py-1 rounded-lg bg-pink-500/10 hover:bg-pink-500/30 text-pink-200 border border-pink-400/20 hover:border-pink-400/50 transition-all active:scale-95 text-start"
+                  >
+                    🎵 {isRtl ? p.name_ar : p.name}
+                  </button>
+                ))}
+              </div>
+            </div>
 
             <form onSubmit={handleSaveAudioQuestion} className="space-y-4 text-xs sm:text-sm">
               <div>
                 <label className="block text-pink-200 font-bold mb-1">
-                  {isRtl ? 'رابط المقطع الصوتي (Audio URL - mp3/ogg/wav)' : 'Audio URL (Direct mp3/ogg link)'}
+                  {isRtl ? 'المقطع الصوتي (MP3 / WAV / M4A / WebM / OGG)' : 'Audio Track (MP3 / WAV / M4A / OGG)'}
                 </label>
+
+                {/* Upload from Device button */}
+                <div className="flex items-center gap-2 mb-2">
+                  <button
+                    type="button"
+                    onClick={() => audioInputRef.current?.click()}
+                    disabled={isUploadingAudio}
+                    className="flex-1 py-2.5 px-3 rounded-xl bg-gradient-to-r from-pink-600/30 to-purple-600/30 border border-pink-400/40 hover:bg-pink-600/40 text-pink-100 font-bold flex items-center justify-center gap-2 transition-all shadow-md active:scale-95 text-xs sm:text-sm"
+                  >
+                    <Upload className="w-4 h-4 text-pink-300" />
+                    <span>
+                      {isUploadingAudio
+                        ? (isRtl ? 'جاري قراءة الملف...' : 'Reading file...')
+                        : (isRtl ? '📁 اختر ملف صوتي من جهازك (MP3 / WAV / M4A)' : '📁 Pick Audio from PC / Phone')}
+                    </span>
+                  </button>
+                  <input
+                    ref={audioInputRef}
+                    type="file"
+                    accept="audio/*,.mp3,.wav,.m4a,.ogg,.aac,.webm"
+                    onChange={handleAudioFileChange}
+                    className="hidden"
+                  />
+                </div>
+
+                {audioUploadFileName && (
+                  <p className="text-[11px] text-emerald-300 font-semibold mb-2 flex items-center gap-1">
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    {isRtl ? 'تم تحميل الملف الصوتي:' : 'Loaded file:'} {audioUploadFileName}
+                  </p>
+                )}
+
+                {/* Direct URL input */}
                 <input
-                  type="url"
+                  type="text"
                   value={audioForm.audio_url}
                   onChange={e => setAudioForm({ ...audioForm, audio_url: e.target.value })}
-                  placeholder="https://.../track.mp3"
-                  className="w-full p-2.5 rounded-xl bg-black/50 border border-pink-400/30 text-white"
+                  placeholder={isRtl ? "أو الصق رابط مباشر: https://.../track.mp3" : "Or paste direct URL: https://.../track.mp3"}
+                  className="w-full p-2.5 rounded-xl bg-black/50 border border-pink-400/30 text-white font-mono text-xs"
                   required
                 />
                 {audioForm.audio_url && (
                   <div className="mt-2 p-2 rounded-xl bg-black/40 border border-pink-500/20 flex flex-col gap-1">
-                    <span className="text-[10px] text-pink-300 font-bold">{isRtl ? 'معاينة تجريبية للصوت:' : 'Live Audio Test:'}</span>
+                    <span className="text-[10px] text-pink-300 font-bold flex items-center gap-1">
+                      <Music className="w-3 h-3" />
+                      {isRtl ? 'معاينة تجريبية للصوت (جاهز للتشغيل):' : 'Live Audio Test (Ready to play):'}
+                    </span>
                     <audio controls src={audioForm.audio_url} className="w-full h-8" />
                   </div>
                 )}
@@ -2678,6 +2912,41 @@ export default function AdminDashboard({ locale = 'en' }: AdminDashboardProps) {
                   placeholder="مثال: سينشي كودو والمتحرون الصغار"
                   className="w-full p-2 rounded-xl bg-black/50 border border-pink-400/30 text-white"
                 />
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-pink-200 font-bold">
+                    {isRtl ? 'صورة الغلاف / البوستر (تظهر عند كشف الإجابة)' : 'Cover Image / Reveal Poster'}
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => audioCoverInputRef.current?.click()}
+                    className="text-[11px] text-pink-300 hover:text-pink-100 font-bold flex items-center gap-1"
+                  >
+                    <Upload className="w-3 h-3" />
+                    {isRtl ? '📁 رفع صورة من جهازك' : '📁 Upload Image'}
+                  </button>
+                  <input
+                    ref={audioCoverInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleAudioCoverUpload}
+                    className="hidden"
+                  />
+                </div>
+                <input
+                  type="text"
+                  value={audioForm.image_url}
+                  onChange={e => setAudioForm({ ...audioForm, image_url: e.target.value })}
+                  placeholder="https://.../poster.jpg"
+                  className="w-full p-2 rounded-xl bg-black/50 border border-pink-400/30 text-white font-mono text-xs"
+                />
+                {audioForm.image_url && (
+                  <div className="mt-1.5 w-full h-20 rounded-xl overflow-hidden border border-pink-400/30 bg-black flex items-center justify-center">
+                    <img src={audioForm.image_url} alt="Cover preview" className="w-full h-full object-cover" />
+                  </div>
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-3">

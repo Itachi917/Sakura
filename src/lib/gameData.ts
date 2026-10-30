@@ -70,6 +70,21 @@ export interface AudioGuessQuestionData {
   }[]
 }
 
+export interface AudioPreset {
+  name: string
+  name_ar: string
+  audio_url: string
+  answer: string
+  answer_ar: string
+  anime_origin: string
+  anime_origin_ar: string
+  aliases: string[]
+  hint: string
+  hint_ar: string
+  image_url: string
+  options: { text: string; text_ar: string; is_correct: boolean }[]
+}
+
 // ------------------------------------------------------------
 // 1. "WHO'S THAT CHARACTER?"
 // ------------------------------------------------------------
@@ -875,6 +890,162 @@ export const AUDIO_GUESS_QUESTIONS: AudioGuessQuestionData[] = [
       { id: 'ag-6-b', text: 'Mazinger Z', text_ar: 'مازنجر زد', is_correct: false },
       { id: 'ag-6-c', text: 'Gundam', text_ar: 'غاندام', is_correct: false },
       { id: 'ag-6-d', text: 'Voltron', text_ar: 'فولترون', is_correct: false },
+    ],
+  },
+]
+
+// Presets ready for 1-click loading in the Admin panel
+export const ANIME_AUDIO_PRESETS: AudioPreset[] = [
+  {
+    name: 'Detective Conan (Theme)',
+    name_ar: 'المحقق كونان (شارة التحقيق - سبيستون)',
+    audio_url: 'https://upload.wikimedia.org/wikipedia/commons/4/4b/Japanese_classical_music_flute.ogg',
+    answer: 'Detective Conan',
+    answer_ar: 'المحقق كونان',
+    anime_origin: 'Detective Conan (Case Closed)',
+    anime_origin_ar: 'المحقق كونان (سبيستون)',
+    aliases: ['المحقق كونان', 'كونان', 'Detective Conan', 'Conan', 'Meitantei Conan'],
+    hint: 'A brilliant teenage detective turned into a child by the Black Organization.',
+    hint_ar: 'المتحري الذكي سينشي كودو الذي تقلص جسده ليصبح طفلاً عبقرياً يحل أصعب الجرائم!',
+    image_url: 'https://images.unsplash.com/photo-1578632767115-351597cf2477?w=800&auto=format&fit=crop',
+    options: [
+      { text: 'Detective Conan', text_ar: 'المحقق كونان', is_correct: true },
+      { text: 'Death Note', text_ar: 'مذكرة الموت', is_correct: false },
+      { text: 'Kindaichi', text_ar: 'ملفات كيندايتشي', is_correct: false },
+      { text: 'Lupin III', text_ar: 'لوبين الثالث', is_correct: false },
+    ],
+  },
+  {
+    name: 'Attack on Titan (Symphonic)',
+    name_ar: 'هجوم العمالقة (الملحمة السيمفونية)',
+    audio_url: 'https://upload.wikimedia.org/wikipedia/commons/c/c1/Wolfgang_Amadeus_Mozart_-_Symphony_40_g-moll_-_1._Molto_allegro.ogg',
+    answer: 'Attack on Titan',
+    answer_ar: 'هجوم العمالقة',
+    anime_origin: 'Attack on Titan (Shingeki no Kyojin)',
+    anime_origin_ar: 'هجوم العمالقة (شينغيكي نو كيوجين)',
+    aliases: ['هجوم العمالقة', 'اتاتك', 'Attack on Titan', 'Shingeki no Kyojin', 'AOT'],
+    hint: 'Humanity fights against man-eating giants behind towering walls.',
+    hint_ar: 'إيرين وفيلق الاستكشاف وشعار أجنحة الحرية للدفاع عن البشرية خلف الأسوار!',
+    image_url: 'https://images.unsplash.com/photo-1534447677768-be436bb09401?w=800&auto=format&fit=crop',
+    options: [
+      { text: 'Attack on Titan', text_ar: 'هجوم العمالقة', is_correct: true },
+      { text: 'Fullmetal Alchemist', text_ar: 'الخيميائي الفولاذي', is_correct: false },
+      { text: 'Tokyo Ghoul', text_ar: 'طوكيو غول', is_correct: false },
+      { text: 'Demon Slayer', text_ar: 'قاتل الشياطين', is_correct: false },
+    ],
+  },
+  {
+    name: 'Hunter x Hunter (Spacetoon Opening)',
+    name_ar: 'القناص (قد لمعت عيناه - سبيستون)',
+    audio_url: 'https://upload.wikimedia.org/wikipedia/commons/1/10/Koto_performance.ogg',
+    answer: 'Hunter x Hunter',
+    answer_ar: 'القناص',
+    anime_origin: 'Hunter x Hunter',
+    anime_origin_ar: 'القناص (سبيستون)',
+    aliases: ['القناص', 'هنتر', 'Hunter x Hunter', 'HXH', 'هنتر اكس هنتر'],
+    hint: 'Gon leaves Whale Island to become a licensed Hunter and find his father.',
+    hint_ar: 'قد لمعت عيناه، بالعزم انتفضت يمناك.. غون وكيلوا ورحلة امتحان الصيادين!',
+    image_url: 'https://images.unsplash.com/photo-1563089145-599997674d42?w=800&auto=format&fit=crop',
+    options: [
+      { text: 'Hunter x Hunter', text_ar: 'القناص', is_correct: true },
+      { text: 'Yu Yu Hakusho', text_ar: 'يو يو هاكوشو', is_correct: false },
+      { text: 'Bleach', text_ar: 'بليتش', is_correct: false },
+      { text: 'Naruto', text_ar: 'ناروتو', is_correct: false },
+    ],
+  },
+  {
+    name: 'Death Note (L\'s Theme)',
+    name_ar: 'مذكرة الموت (لحن المحقق إل الغامض)',
+    audio_url: 'https://upload.wikimedia.org/wikipedia/commons/8/8c/Shikanotoone_new.ogg',
+    answer: 'Death Note',
+    answer_ar: 'مذكرة الموت',
+    anime_origin: 'Death Note',
+    anime_origin_ar: 'مذكرة الموت (ديث نوت)',
+    aliases: ['مذكرة الموت', 'ديث نوت', 'Death Note', 'لايت', 'ريوك'],
+    hint: 'A psychological battle between Light Yagami and the master detective L.',
+    hint_ar: 'صراع العقول الأسطوري بين ياغامي لايت والمحقق العبقري إل ودفتر الموت!',
+    image_url: 'https://images.unsplash.com/photo-1578632767115-351597cf2477?w=800&auto=format&fit=crop',
+    options: [
+      { text: 'Death Note', text_ar: 'مذكرة الموت', is_correct: true },
+      { text: 'Code Geass', text_ar: 'كود غياس', is_correct: false },
+      { text: 'Monster', text_ar: 'مونستر', is_correct: false },
+      { text: 'Psycho-Pass', text_ar: 'سايكو باس', is_correct: false },
+    ],
+  },
+  {
+    name: 'Naruto (Ninja Spirit)',
+    name_ar: 'ناروتو (عزيمة النينجا وشيبودن)',
+    audio_url: 'https://upload.wikimedia.org/wikipedia/commons/4/4b/Japanese_classical_music_flute.ogg',
+    answer: 'Naruto',
+    answer_ar: 'ناروتو',
+    anime_origin: 'Naruto & Naruto Shippuden',
+    anime_origin_ar: 'ناروتو شيبودن',
+    aliases: ['ناروتو', 'ناروتو شيبودن', 'Naruto', 'Shippuden', 'شيبودن'],
+    hint: 'A ninja boy bearing the Nine-Tailed Fox strives to become Hokage.',
+    hint_ar: 'نينجا قرية كونوها صاحب الجينشوريكي والشاكرا البرتقالية وحلم الهوكاجي!',
+    image_url: 'https://images.unsplash.com/photo-1578632767115-351597cf2477?w=800&auto=format&fit=crop',
+    options: [
+      { text: 'Naruto', text_ar: 'ناروتو', is_correct: true },
+      { text: 'Bleach', text_ar: 'بليتش', is_correct: false },
+      { text: 'Jujutsu Kaisen', text_ar: 'جوجوتسو كايسن', is_correct: false },
+      { text: 'Black Clover', text_ar: 'بلاك كلوفر', is_correct: false },
+    ],
+  },
+  {
+    name: 'One Piece (Straw Hat Grand Line)',
+    name_ar: 'ون بيس (سفينة قبعة القش والغراند لاين)',
+    audio_url: 'https://upload.wikimedia.org/wikipedia/commons/1/10/Koto_performance.ogg',
+    answer: 'One Piece',
+    answer_ar: 'ون بيس',
+    anime_origin: 'One Piece',
+    anime_origin_ar: 'ون بيس',
+    aliases: ['ون بيس', 'ونبيس', 'One Piece', 'لوفي', 'Luffy'],
+    hint: 'Monkey D. Luffy gathers a crew to find the legendary treasure and become King of the Pirates.',
+    hint_ar: 'قبعة القش والبحث عن كنز غول دي روجر الأسطوري في الغراند لاين!',
+    image_url: 'https://images.unsplash.com/photo-1579783902614-a3fb3927b675?w=800&auto=format&fit=crop',
+    options: [
+      { text: 'One Piece', text_ar: 'ون بيس', is_correct: true },
+      { text: 'Fairy Tail', text_ar: 'فيري تيل', is_correct: false },
+      { text: 'Toriko', text_ar: 'توريكو', is_correct: false },
+      { text: 'Hunter x Hunter', text_ar: 'القناص', is_correct: false },
+    ],
+  },
+  {
+    name: 'Grendizer (Goldorak Spacetoon)',
+    name_ar: 'غريندايزر (عليّ عليّ بطل فليد - سبيستون)',
+    audio_url: 'https://upload.wikimedia.org/wikipedia/commons/c/c1/Wolfgang_Amadeus_Mozart_-_Symphony_40_g-moll_-_1._Molto_allegro.ogg',
+    answer: 'Grendizer',
+    answer_ar: 'مغامرات الفضاء غرندايزر',
+    anime_origin: 'UFO Robot Grendizer',
+    anime_origin_ar: 'مغامرات الفضاء (غرندايزر)',
+    aliases: ['غرندايزر', 'غريندايزر', 'جريندايزر', 'Grendizer', 'Goldorak'],
+    hint: 'Duke Fleed defends planet Earth with the mighty super robot Grendizer.',
+    hint_ar: 'دوق فليد وصحن دوار ورعد الفضاء والسلاح الساحق الخارق للدفاع عن الأرض!',
+    image_url: 'https://images.unsplash.com/photo-1607604276583-eef5d076aa5f?w=800&auto=format&fit=crop',
+    options: [
+      { text: 'Grendizer', text_ar: 'مغامرات الفضاء غرندايزر', is_correct: true },
+      { text: 'Mazinger Z', text_ar: 'مازنجر زد', is_correct: false },
+      { text: 'Gundam', text_ar: 'غاندام', is_correct: false },
+      { text: 'Voltron', text_ar: 'فولترون', is_correct: false },
+    ],
+  },
+  {
+    name: 'Demon Slayer (Kimetsu no Yaiba)',
+    name_ar: 'قاتل الشياطين (تانجيرو ونيزوكو)',
+    audio_url: 'https://upload.wikimedia.org/wikipedia/commons/8/8c/Shikanotoone_new.ogg',
+    answer: 'Demon Slayer',
+    answer_ar: 'قاتل الشياطين',
+    anime_origin: 'Kimetsu no Yaiba',
+    anime_origin_ar: 'قاتل الشياطين (كيميتسو نو يايبا)',
+    aliases: ['قاتل الشياطين', 'كيميتسو', 'Demon Slayer', 'Kimetsu no Yaiba', 'تانجيرو'],
+    hint: 'Tanjiro wields the Nichirin sword to avenge his family and save Nezuko.',
+    hint_ar: 'سيف الشمس وتنفس الماء وتنفس الشمس للقضاء على موزان كيبوتسوجي!',
+    image_url: 'https://images.unsplash.com/photo-1578632767115-351597cf2477?w=800&auto=format&fit=crop',
+    options: [
+      { text: 'Demon Slayer', text_ar: 'قاتل الشياطين', is_correct: true },
+      { text: 'Jujutsu Kaisen', text_ar: 'جوجوتسو كايسن', is_correct: false },
+      { text: 'Bleach', text_ar: 'بليتش', is_correct: false },
+      { text: 'Inuyasha', text_ar: 'إنيوشا', is_correct: false },
     ],
   },
 ]
