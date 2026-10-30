@@ -36,6 +36,8 @@ import {
   getSilhouetteQuestionsForSession,
   getEmojiRiddleQuestionsForSession,
   prepareGameSwitchSettings,
+  initGarticPhoneSettings,
+  advanceGarticPhonePhase,
 } from '@/lib/gameHelpers'
 import type { GameSession, SessionParticipant, ActivityType } from '@/types/database'
 import {
@@ -62,6 +64,7 @@ const ALL_GAMES: { id: ActivityType; name: string; name_ar: string; desc: string
   { id: 'silhouette_guess', name: "Who's That Silhouette?", name_ar: 'خمن ظل الشخصية', desc: 'ظل أسود يكشف ملامحه تدريجياً', emoji: '👤' },
   { id: 'emoji_riddle', name: 'Anime Emoji Riddle', name_ar: 'ألغاز إيموجي الأنمي', desc: 'رموز تعبيرية تمثل حبكة أو شخصية', emoji: '🎭' },
   { id: 'draw_it_guess_it', name: 'Gartic Sakura (Draw & Guess)', name_ar: 'لعبة جارتك (ارسم واخمّن - Gartic.io)', desc: 'أحد اللاعبين يرسم والبقية يخمنون في شات تفاعلي', emoji: '🎨' },
+  { id: 'gartic_phone', name: 'Gartic Phone', name_ar: 'هاتف جارتك (Gartic Phone)', desc: 'لعبة الهاتف المكسور: اكتب، ارسم، وخمن!', emoji: '📞' },
   { id: 'whos_that_character', name: "Who's That Character?", name_ar: 'من هذه الشخصية؟', desc: 'كويز كلاسيكي بصور الشخصيات', emoji: '❓' },
   { id: 'spacetoon_nostalgia', name: 'Spacetoon Nostalgia', name_ar: 'نوستالجيا سبيستون', desc: 'ذكريات الطفولة وشباب المستقبل', emoji: '📺' },
   { id: 'anime_expert_exam', name: 'Anime Expert Exam', name_ar: 'اختبار خبير الأنمي', desc: 'أسئلة حصرية لعشاق الأوتاكو', emoji: '🎓' },
@@ -448,7 +451,9 @@ export default function HostControlRoom({ sessionId, locale = 'en' }: HostContro
       const targetMode = ((currentSettings as any)?.game_mode as string) || session?.activity_type || 'whos_that_character'
       let newSettings: Record<string, unknown>
 
-      if ((session?.activity_type === 'draw_it_guess_it' || targetMode === 'draw_it_guess_it') && (newStatus === 'question_active' || typeof newQuestionIndex === 'number')) {
+      if ((session?.activity_type === 'gartic_phone' || targetMode === 'gartic_phone') && (newStatus === 'question_active' && session?.status === 'lobby')) {
+        newSettings = initGarticPhoneSettings(participants)
+      } else if ((session?.activity_type === 'draw_it_guess_it' || targetMode === 'draw_it_guess_it') && (newStatus === 'question_active' || typeof newQuestionIndex === 'number')) {
         const targetIdx = typeof newQuestionIndex === 'number' ? newQuestionIndex : currentIndex
         newSettings = prepareDrawItRound(session, participants, targetIdx)
       } else {
@@ -494,6 +499,47 @@ export default function HostControlRoom({ sessionId, locale = 'en' }: HostContro
     sound.playClick()
     await supabase.from('session_participants').delete().eq('id', partId)
     setParticipants(prev => prev.filter(p => p.id !== partId))
+  }
+
+  // Advance Gartic Phone Phase
+  const handleAdvanceGarticPhase = async () => {
+    if (!session) return
+    setActionLoading(true)
+    sound.playClick()
+    try {
+      const currentSettings = (session.settings as Record<string, unknown>) || {}
+      const phase = (currentSettings.phone_phase as string) || 'prompt'
+      if (phase === 'album') {
+        const chains = (currentSettings.chains as Record<string, unknown>) || {}
+        const totalChains = Object.keys(chains).length
+        const currentAlbumIdx = Number(currentSettings.current_album_index || 0)
+        if (currentAlbumIdx + 1 < totalChains) {
+          const updated = { ...currentSettings, current_album_index: currentAlbumIdx + 1 }
+          const { data } = await supabase
+            .from('game_sessions')
+            .update({ settings: updated as any })
+            .eq('id', session.id)
+            .select()
+            .single()
+          if (data) setSession(data)
+        } else {
+          updateSessionStatus('final_results')
+        }
+      } else {
+        const nextSettings = advanceGarticPhonePhase(currentSettings, participants)
+        const { data } = await supabase
+          .from('game_sessions')
+          .update({ settings: nextSettings as any })
+          .eq('id', session.id)
+          .select()
+          .single()
+        if (data) setSession(data)
+      }
+    } catch (err) {
+      console.error('Error advancing gartic phase:', err)
+    } finally {
+      setActionLoading(false)
+    }
   }
 
   // Toggle show questions on players devices
@@ -594,12 +640,14 @@ export default function HostControlRoom({ sessionId, locale = 'en' }: HostContro
   const isAudioGame = activeMode === 'audio_guess'
   const isSilhouetteGame = activeMode === 'silhouette_guess'
   const isEmojiGame = activeMode === 'emoji_riddle'
+  const isGarticPhone = activeMode === 'gartic_phone'
 
   const totalQuestions =
     (isZoomGame ? zoomQuestions.length : 0) ||
     (isAudioGame ? audioQuestions.length : 0) ||
     (isSilhouetteGame ? silhouetteQuestions.length : 0) ||
     (isEmojiGame ? emojiQuestions.length : 0) ||
+    (isGarticPhone ? 4 : 0) ||
     (session?.activity_type === 'draw_it_guess_it'
       ? Math.min(15, Math.max(DRAWING_WORDS.length, participants.length || 5))
       : 0) ||
@@ -1131,7 +1179,20 @@ export default function HostControlRoom({ sessionId, locale = 'en' }: HostContro
             {/* Next Round or Crown Winners */}
             {session.status !== 'lobby' && (
               <div className="grid grid-cols-2 gap-3">
-                {currentIndex + 1 < totalQuestions ? (
+                {isGarticPhone ? (
+                  <button
+                    onClick={handleAdvanceGarticPhase}
+                    disabled={actionLoading}
+                    className="py-3.5 px-4 rounded-xl bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-500 text-white font-bold text-sm shadow-lg flex items-center justify-center gap-2"
+                  >
+                    <SkipForward size={16} />
+                    <span>
+                      {(session.settings as any)?.phone_phase === 'album'
+                        ? (isRtl ? 'الألبوم التالي / تتويج 📖' : 'Next Album / Podium 📖')
+                        : (isRtl ? 'المرحلة التالية ⏭️' : 'Next Phase ⏭️')}
+                    </span>
+                  </button>
+                ) : currentIndex + 1 < totalQuestions ? (
                   <button
                     onClick={() => updateSessionStatus('question_active', currentIndex + 1)}
                     disabled={actionLoading}
@@ -1164,7 +1225,7 @@ export default function HostControlRoom({ sessionId, locale = 'en' }: HostContro
           </div>
 
           {/* QUESTION PREVIEW (For Quiz modes only) */}
-          {currentQuizQ && !isZoomGame && !isAudioGame && !isSilhouetteGame && !isEmojiGame && (
+          {currentQuizQ && !isZoomGame && !isAudioGame && !isSilhouetteGame && !isEmojiGame && !isGarticPhone && (
             <div className="p-5 rounded-2xl bg-black/30 border border-pink-500/15">
               <span className="text-xs uppercase tracking-wider text-pink-300/70 font-bold block mb-2">
                 {isRtl ? 'معاينة السؤال الحالي للمنظم:' : 'Host Question Preview:'}
@@ -1378,6 +1439,70 @@ export default function HostControlRoom({ sessionId, locale = 'en' }: HostContro
                 >
                   <Eye size={16} />
                   <span>{isRtl ? 'كشف حل اللغز للجمهور 👁️' : 'Reveal Riddle Answer 👁️'}</span>
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* GARTIC PHONE HOST STATUS CARD */}
+          {isGarticPhone && (
+            <div className="p-5 rounded-2xl bg-[#1d0b2e] border-2 border-purple-500/30 space-y-4">
+              <div className="flex items-center justify-between pb-3 border-b border-purple-500/20">
+                <span className="text-xs font-black uppercase text-purple-300 tracking-wider flex items-center gap-1.5">
+                  <span>📞</span>
+                  <span>{isRtl ? 'متابعة هاتف جارتك (Gartic Phone)' : 'Gartic Phone Status'}</span>
+                </span>
+                <span className="px-2.5 py-1 rounded-full text-xs font-mono font-bold bg-purple-500/20 text-purple-200 border border-purple-400/30">
+                  {((session.settings as any)?.phone_phase || 'prompt').toUpperCase()}
+                </span>
+              </div>
+
+              <div className="p-4 rounded-xl bg-black/40 border border-purple-500/20 space-y-3">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-purple-200/80 font-bold">
+                    {isRtl ? 'المرحلة النشطة:' : 'Active Phase:'}
+                  </span>
+                  <span className="font-black text-white">
+                    {(session.settings as any)?.phone_phase === 'prompt' && (isRtl ? '1. كتابة الفكرة ✍️' : '1. Write Prompt ✍️')}
+                    {(session.settings as any)?.phone_phase === 'drawing' && (isRtl ? '2. رسم الفكرة 🎨' : '2. Drawing 🎨')}
+                    {(session.settings as any)?.phone_phase === 'description' && (isRtl ? '3. تخمين ووصف الرسمة 🧐' : '3. Describing 🧐')}
+                    {(session.settings as any)?.phone_phase === 'album' && (isRtl ? '4. عرض ألبوم الذكريات 📖' : '4. Album Reveal 📖')}
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-purple-200/80 font-bold">
+                    {isRtl ? 'الردود المستلمة:' : 'Submissions Received:'}
+                  </span>
+                  <span className="font-mono font-black text-pink-300">
+                    {Object.keys((session.settings as any)?.submissions || {}).length} / {participants.length || 0}
+                  </span>
+                </div>
+
+                {(session.settings as any)?.phone_phase === 'album' && (
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-purple-200/80 font-bold">
+                      {isRtl ? 'الألبوم المعروض:' : 'Current Album:'}
+                    </span>
+                    <span className="font-mono font-black text-amber-300">
+                      {Number((session.settings as any)?.current_album_index || 0) + 1} / {Object.keys((session.settings as any)?.chains || {}).length || 1}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {session.status === 'question_active' && (
+                <button
+                  onClick={handleAdvanceGarticPhase}
+                  disabled={actionLoading}
+                  className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-black text-sm shadow-lg flex items-center justify-center gap-2"
+                >
+                  <SkipForward size={16} />
+                  <span>
+                    {(session.settings as any)?.phone_phase === 'album'
+                      ? (isRtl ? 'الألبوم التالي / إنهاء وتتويج ⏭️' : 'Next Album / Finish ⏭️')
+                      : (isRtl ? 'نقل جميع اللاعبين للمرحلة التالية ⏭️' : 'Advance All to Next Phase ⏭️')}
+                  </span>
                 </button>
               )}
             </div>

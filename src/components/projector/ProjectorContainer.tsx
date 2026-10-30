@@ -34,6 +34,8 @@ import {
   getSilhouetteQuestionsForSession,
   getEmojiRiddleQuestionsForSession,
   prepareGameSwitchSettings,
+  initGarticPhoneSettings,
+  advanceGarticPhonePhase,
 } from '@/lib/gameHelpers'
 import { cn } from '@/lib/utils'
 import type { GameSession, SessionParticipant } from '@/types/database'
@@ -41,6 +43,7 @@ import ProjectorLobby from './ProjectorLobby'
 import ProjectorQuiz from './ProjectorQuiz'
 import ProjectorFeud from './ProjectorFeud'
 import ProjectorDraw from './ProjectorDraw'
+import ProjectorGarticPhone from './ProjectorGarticPhone'
 import ProjectorLeaderboard from './ProjectorLeaderboard'
 import ProjectorZoomGuess from './ProjectorZoomGuess'
 import ProjectorAudioGuess from './ProjectorAudioGuess'
@@ -242,6 +245,7 @@ export default function ProjectorContainer({ sessionId, locale = 'en' }: Project
   const isEmoji = activeMode === 'emoji_riddle'
   const isFeud = activeMode === 'sakura_feud'
   const isDrawIt = activeMode === 'draw_it_guess_it'
+  const isGarticPhone = activeMode === 'gartic_phone'
   const isQuiz = ['whos_that_character', 'spacetoon_nostalgia', 'anime_expert_exam'].includes(activeMode)
 
   const totalQuestions = isSilhouette
@@ -256,6 +260,8 @@ export default function ProjectorContainer({ sessionId, locale = 'en' }: Project
     ? feudRounds.length
     : isDrawIt
     ? Math.min(15, Math.max(DRAWING_WORDS.length, participants.length || 5))
+    : isGarticPhone
+    ? 4
     : quizQuestions.length || 5
   const currentIdx = getQuestionIndex(session)
 
@@ -269,7 +275,9 @@ export default function ProjectorContainer({ sessionId, locale = 'en' }: Project
       const targetMode = ((currentSettings as any)?.game_mode as string) || session.activity_type
       let newSettings: Record<string, unknown>
 
-      if (isDrawIt && (newStatus === 'question_active' || typeof newQuestionIndex === 'number')) {
+      if (isGarticPhone && (newStatus === 'question_active' && session.status === 'lobby')) {
+        newSettings = initGarticPhoneSettings(participants)
+      } else if (isDrawIt && (newStatus === 'question_active' || typeof newQuestionIndex === 'number')) {
         const targetIdx = typeof newQuestionIndex === 'number' ? newQuestionIndex : currentIdx
         newSettings = prepareDrawItRound(session, participants, targetIdx)
       } else {
@@ -727,6 +735,16 @@ export default function ProjectorContainer({ sessionId, locale = 'en' }: Project
             />
           )}
 
+        {/* GARTIC PHONE STAGE */}
+        {isGarticPhone &&
+          ['question_active', 'answer_collection_ended', 'answer_reveal', 'round_results'].includes(session.status) && (
+            <ProjectorGarticPhone
+              session={session}
+              participants={participants}
+              locale={locale}
+            />
+          )}
+
         {/* FINAL RESULTS & LEADERBOARD */}
         {['final_results', 'completed'].includes(session.status) && (
           <ProjectorLeaderboard
@@ -846,7 +864,53 @@ export default function ProjectorContainer({ sessionId, locale = 'en' }: Project
                 </button>
               )}
 
-              {session.status === 'question_active' && (
+              {isGarticPhone && session.status === 'question_active' ? (
+                <button
+                  onClick={async () => {
+                    setActionLoading(true)
+                    sound.playClick()
+                    try {
+                      const currentSettings = (session.settings as Record<string, unknown>) || {}
+                      const phase = (currentSettings.phone_phase as string) || 'prompt'
+                      if (phase === 'album') {
+                        const chains = (currentSettings.chains as Record<string, unknown>) || {}
+                        const totalChains = Object.keys(chains).length
+                        const currentAlbumIdx = Number(currentSettings.current_album_index || 0)
+                        if (currentAlbumIdx + 1 < totalChains) {
+                          const updated = { ...currentSettings, current_album_index: currentAlbumIdx + 1 }
+                          const { data } = await supabase
+                            .from('game_sessions')
+                            .update({ settings: updated as any })
+                            .eq('id', session.id)
+                            .select()
+                            .single()
+                          if (data) setSession(data)
+                        } else {
+                          handleHostAction('final_results')
+                        }
+                      } else {
+                        const nextSettings = advanceGarticPhonePhase(currentSettings, participants)
+                        const { data } = await supabase
+                          .from('game_sessions')
+                          .update({ settings: nextSettings as any })
+                          .eq('id', session.id)
+                          .select()
+                          .single()
+                        if (data) setSession(data)
+                      }
+                    } catch (err) {
+                      console.error('Error advancing gartic phone:', err)
+                    } finally {
+                      setActionLoading(false)
+                    }
+                  }}
+                  disabled={actionLoading}
+                  className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-500 text-white font-black text-xs sm:text-sm shadow-lg flex items-center gap-1.5 transition-all"
+                >
+                  <span>{isRtl ? 'المرحلة التالية ⏭️' : 'Next Phase ⏭️'}</span>
+                  <ChevronRight size={15} />
+                </button>
+              ) : session.status === 'question_active' ? (
                 <>
                   <button
                     onClick={() => handleHostAction('answer_reveal')}
@@ -872,7 +936,7 @@ export default function ProjectorContainer({ sessionId, locale = 'en' }: Project
                     <span>{isRtl ? 'تخطي' : 'Skip'}</span>
                   </button>
                 </>
-              )}
+              ) : null}
 
               {session.status === 'answer_reveal' && (
                 <>
@@ -997,6 +1061,7 @@ export default function ProjectorContainer({ sessionId, locale = 'en' }: Project
                 { id: 'emoji_riddle', name: 'ألغاز إيموجي الأنمي', icon: '🎭' },
                 { id: 'sakura_feud', name: 'صراع الساكورا (الفرق)', icon: '⚔️' },
                 { id: 'draw_it_guess_it', name: 'لعبة جارتك (ارسم واخمّن - Gartic.io)', icon: '🎨' },
+                { id: 'gartic_phone', name: 'هاتف جارتك (Gartic Phone)', icon: '📞' },
               ].map(g => (
                 <button
                   key={g.id}

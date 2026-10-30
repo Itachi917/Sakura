@@ -8,12 +8,15 @@ import {
   ZOOM_GUESS_QUESTIONS,
   SILHOUETTE_QUESTIONS,
   EMOJI_RIDDLE_QUESTIONS,
+  GARTIC_PHONE_PROMPTS,
   type QuizQuestionData,
   type AudioGuessQuestionData,
   type ZoomGuessQuestionData,
   type SilhouetteQuestionData,
   type EmojiRiddleData,
   type DrawingWordData,
+  type GarticPhoneChain,
+  type GarticPhoneTurn,
 } from './gameData'
 
 /**
@@ -356,6 +359,12 @@ export function prepareGameSwitchSettings(
   } else if (targetActivity === 'draw_it_guess_it') {
     baseSettings.drawing_words = shuffleArray(getDrawingWordsForSession(currentSettings))
     baseSettings.round_duration = 60
+  } else if (targetActivity === 'gartic_phone') {
+    baseSettings.phone_phase = 'prompt'
+    baseSettings.round_duration = 45
+    baseSettings.current_album_index = 0
+    baseSettings.chains = {}
+    baseSettings.submissions = {}
   } else if (['whos_that_character', 'spacetoon_nostalgia', 'anime_expert_exam'].includes(targetActivity)) {
     baseSettings.quiz_questions = shuffleArray(getQuizQuestionsForActivity(targetActivity, currentSettings))
   }
@@ -365,3 +374,195 @@ export function prepareGameSwitchSettings(
     settings: baseSettings,
   }
 }
+
+/**
+ * Initializes a Gartic Phone game session state
+ */
+export function initGarticPhoneSettings(participants: SessionParticipant[]): Record<string, unknown> {
+  const now = Date.now()
+  const roundDuration = 45 // 45s for writing prompt
+  const chains: Record<string, GarticPhoneChain> = {}
+
+  participants.forEach((p) => {
+    chains[p.id] = {
+      id: `chain-${p.id}`,
+      ownerId: p.id,
+      ownerNickname: p.nickname,
+      turns: [],
+    }
+  })
+
+  return {
+    game_mode: 'gartic_phone',
+    phone_phase: 'prompt', // 'prompt' | 'drawing' | 'description' | 'album'
+    round_duration: roundDuration,
+    round_start_time: now,
+    round_deadline: new Date(now + roundDuration * 1000).toISOString(),
+    chains,
+    submissions: {},
+    current_album_index: 0,
+  }
+}
+
+/**
+ * Advances the Gartic Phone game to the next phase:
+ * prompt -> drawing -> description -> album showcase
+ */
+export function advanceGarticPhonePhase(
+  currentSettings: Record<string, unknown>,
+  participants: SessionParticipant[]
+): Record<string, unknown> {
+  const phase = (currentSettings.phone_phase as string) || 'prompt'
+  const chains = { ...((currentSettings.chains as Record<string, GarticPhoneChain>) || {}) }
+  const submissions = (currentSettings.submissions as Record<string, string>) || {}
+  const now = Date.now()
+  const N = Math.max(1, participants.length)
+
+  // Ensure every participant has a chain entry
+  participants.forEach((p) => {
+    if (!chains[p.id]) {
+      chains[p.id] = {
+        id: `chain-${p.id}`,
+        ownerId: p.id,
+        ownerNickname: p.nickname,
+        turns: [],
+      }
+    }
+  })
+
+  if (phase === 'prompt') {
+    // Collect prompt submissions into each chain
+    participants.forEach((p, idx) => {
+      const fallbackPrompt =
+        GARTIC_PHONE_PROMPTS[idx % GARTIC_PHONE_PROMPTS.length]?.prompt_ar ||
+        'لوفي يأكل رامن مع ناروتو في مسقط'
+      const promptText = submissions[p.id] || fallbackPrompt
+      const chain = chains[p.id]
+      if (chain) {
+        chain.turns = [
+          {
+            participantId: p.id,
+            nickname: p.nickname,
+            type: 'prompt',
+            content: promptText,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          },
+        ]
+      }
+    })
+
+    const drawDuration = 70 // 70s for drawing
+    return {
+      ...currentSettings,
+      phone_phase: 'drawing',
+      round_duration: drawDuration,
+      round_start_time: now,
+      round_deadline: new Date(now + drawDuration * 1000).toISOString(),
+      chains,
+      submissions: {},
+    }
+  } else if (phase === 'drawing') {
+    // Collect drawing submissions into each chain
+    participants.forEach((p, idx) => {
+      // Participant p drew for owner of chain (idx - 1 + N) % N
+      const targetOwner = participants[(idx - 1 + N) % N]
+      const chain = targetOwner ? chains[targetOwner.id] : null
+      const drawingData = submissions[p.id] || ''
+
+      if (chain) {
+        chain.turns.push({
+          participantId: p.id,
+          nickname: p.nickname,
+          type: 'drawing',
+          content: drawingData,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        })
+      }
+    })
+
+    const descDuration = 45 // 45s for describing
+    return {
+      ...currentSettings,
+      phone_phase: 'description',
+      round_duration: descDuration,
+      round_start_time: now,
+      round_deadline: new Date(now + descDuration * 1000).toISOString(),
+      chains,
+      submissions: {},
+    }
+  } else if (phase === 'description') {
+    // Collect description submissions into each chain
+    participants.forEach((p, idx) => {
+      const targetOwner = participants[(idx - (N > 2 ? 2 : 1) + N) % N]
+      const chain = targetOwner ? chains[targetOwner.id] : null
+      const descText =
+        submissions[p.id] ||
+        (targetOwner?.nickname ? `رسمة جميلة بواسطة ${targetOwner.nickname}` : 'رسمة أنمي غامضة')
+
+      if (chain) {
+        chain.turns.push({
+          participantId: p.id,
+          nickname: p.nickname,
+          type: 'description',
+          content: descText,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        })
+      }
+    })
+
+    return {
+      ...currentSettings,
+      phone_phase: 'album',
+      chains,
+      submissions: {},
+      current_album_index: 0,
+      round_deadline: undefined,
+    }
+  }
+
+  return currentSettings
+}
+
+/**
+ * Determines what task a player needs to do in the current Gartic Phone phase
+ */
+export function getAssignedGarticTask(
+  participantId: string,
+  participants: SessionParticipant[],
+  settings: Record<string, unknown>
+): {
+  phase: 'prompt' | 'drawing' | 'description' | 'album'
+  targetPrompt?: string
+  targetDrawing?: string
+  targetOwnerNickname?: string
+} {
+  const phase = (settings.phone_phase as 'prompt' | 'drawing' | 'description' | 'album') || 'prompt'
+  const chains = (settings.chains as Record<string, GarticPhoneChain>) || {}
+  const N = Math.max(1, participants.length)
+  const myIndex = participants.findIndex((p) => p.id === participantId)
+
+  if (phase === 'drawing') {
+    const targetOwner = participants[(myIndex - 1 + N) % N]
+    const chain = targetOwner ? chains[targetOwner.id] : null
+    const firstTurn = chain?.turns?.find((t) => t.type === 'prompt')
+    return {
+      phase: 'drawing',
+      targetPrompt: firstTurn?.content || 'ارسم شخصية أنمي في موقف مضحك!',
+      targetOwnerNickname: targetOwner?.nickname || 'زميلك',
+    }
+  }
+
+  if (phase === 'description') {
+    const targetOwner = participants[(myIndex - (N > 2 ? 2 : 1) + N) % N]
+    const chain = targetOwner ? chains[targetOwner.id] : null
+    const drawTurn = chain?.turns?.slice().reverse().find((t) => t.type === 'drawing')
+    return {
+      phase: 'description',
+      targetDrawing: drawTurn?.content || '',
+      targetOwnerNickname: targetOwner?.nickname || 'زميلك',
+    }
+  }
+
+  return { phase }
+}
+

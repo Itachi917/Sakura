@@ -13,6 +13,7 @@ import PlayerZoomGuessView from './PlayerZoomGuessView'
 import PlayerAudioGuessView from './PlayerAudioGuessView'
 import PlayerSilhouetteView from './PlayerSilhouetteView'
 import PlayerEmojiRiddleView from './PlayerEmojiRiddleView'
+import PlayerGarticPhoneView from './PlayerGarticPhoneView'
 import SakuraCertificateModal from '../certificate/SakuraCertificateModal'
 import {
   WHOS_THAT_CHARACTER_QUESTIONS,
@@ -263,6 +264,7 @@ export default function PlayerContainer({ sessionId, locale = 'en' }: PlayerCont
   const isSilhouette = activeMode === 'silhouette_guess'
   const isEmoji = activeMode === 'emoji_riddle'
   const isDrawIt = activeMode === 'draw_it_guess_it'
+  const isGarticPhone = activeMode === 'gartic_phone'
   const isFeud = activeMode === 'sakura_feud'
   const isQuiz = ['whos_that_character', 'spacetoon_nostalgia', 'anime_expert_exam'].includes(activeMode)
 
@@ -476,6 +478,16 @@ export default function PlayerContainer({ sessionId, locale = 'en' }: PlayerCont
         {isDrawIt &&
           ['question_active', 'answer_collection_ended', 'answer_reveal', 'round_results'].includes(session.status) && (
             <PlayerDrawView
+              session={session}
+              participant={participant}
+              locale={locale}
+            />
+          )}
+
+        {/* GARTIC PHONE MODE */}
+        {isGarticPhone &&
+          ['question_active', 'answer_collection_ended', 'answer_reveal', 'round_results'].includes(session.status) && (
+            <PlayerGarticPhoneView
               session={session}
               participant={participant}
               locale={locale}

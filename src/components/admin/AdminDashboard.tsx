@@ -78,6 +78,7 @@ const ACTIVITIES: { id: ActivityType; name: string; name_ar: string; emoji: stri
   { id: 'silhouette_guess', name: "Who's That Silhouette?", name_ar: 'خمن ظل الشخصية', emoji: '👤' },
   { id: 'emoji_riddle', name: 'Anime Emoji Riddle', name_ar: 'ألغاز إيموجي الأنمي', emoji: '🎭' },
   { id: 'draw_it_guess_it', name: 'Gartic Sakura (Draw & Guess)', name_ar: 'لعبة جارتك (ارسم واخمّن - Gartic.io) 🎨', emoji: '🎨' },
+  { id: 'gartic_phone', name: 'Gartic Phone', name_ar: 'لعبة هاتف جارتك (Gartic Phone) 📞', emoji: '📞' },
   { id: 'audio_guess', name: 'Audio & OST Guess', name_ar: 'خمّن الأوست والصوت 🎵', emoji: '🎵' },
   { id: 'spacetoon_nostalgia', name: 'Spacetoon Nostalgia', name_ar: 'نوستالجيا سبيستون', emoji: '📺' },
   { id: 'anime_expert_exam', name: 'Anime Expert Exam', name_ar: 'اختبار خبير الأنمي', emoji: '📚' },
@@ -511,6 +512,14 @@ export default function AdminDashboard({ locale = 'en' }: AdminDashboardProps) {
         settingsPayload.drawing_aliases = shuffledWords[0]?.aliases || []
         settingsPayload.round_duration = 60
       }
+      if (selectedActivity === 'gartic_phone') {
+        settingsPayload.game_mode = 'gartic_phone'
+        settingsPayload.phone_phase = 'prompt'
+        settingsPayload.round_duration = 45
+        settingsPayload.current_album_index = 0
+        settingsPayload.chains = {}
+        settingsPayload.submissions = {}
+      }
       if (selectedActivity === 'audio_guess') {
         settingsPayload.game_mode = 'audio_guess'
         settingsPayload.audio_questions = shuffleArray(audioQuestions)
@@ -533,7 +542,7 @@ export default function AdminDashboard({ locale = 'en' }: AdminDashboardProps) {
         .single()
 
       // If enum not yet migrated in Supabase, fallback cleanly to whos_that_character with full settingsPayload
-      if (error && ['audio_guess', 'zoom_guess', 'silhouette_guess', 'emoji_riddle'].includes(selectedActivity)) {
+      if (error && ['audio_guess', 'zoom_guess', 'silhouette_guess', 'emoji_riddle', 'gartic_phone'].includes(selectedActivity)) {
         const fallbackRes = await supabase
           .from('game_sessions')
           .insert({

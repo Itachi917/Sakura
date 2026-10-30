@@ -116,6 +116,28 @@ export interface EmojiRiddleData {
   options?: { id: string; text: string; text_ar: string; is_correct: boolean }[]
 }
 
+export interface GarticPhoneTurn {
+  participantId: string
+  nickname: string
+  type: 'prompt' | 'drawing' | 'description'
+  content: string // Text prompt or description, or canvas dataUrl
+  timestamp?: string
+}
+
+export interface GarticPhoneChain {
+  id: string
+  ownerId: string
+  ownerNickname: string
+  turns: GarticPhoneTurn[]
+}
+
+export interface GarticPhonePromptPreset {
+  id: string
+  prompt: string
+  prompt_ar: string
+  category: string
+}
+
 // ------------------------------------------------------------
 // 1. "WHO'S THAT CHARACTER?"
 // ------------------------------------------------------------
@@ -613,6 +635,84 @@ export const DRAWING_WORDS: DrawingWordData[] = [
     category_ar: 'سبيستون',
     difficulty: 'medium',
     aliases: ['سبيستون', 'شعار سبيستون', 'كوكب سبيستون', 'spacetoon'],
+  },
+]
+
+// ------------------------------------------------------------
+// 5b. GARTIC PHONE ANIME PROMPTS PRESETS (عبارات هاتف جارتك المضحكة 📞)
+// ------------------------------------------------------------
+export const GARTIC_PHONE_PROMPTS: GarticPhonePromptPreset[] = [
+  {
+    id: 'gpp-1',
+    prompt: 'Luffy stealing meat from Goku while flying on Nimbus',
+    prompt_ar: 'لوفي يسرق قطعة لحم من غوكو وهو يطير على غيمة نيمبوس',
+    category: 'One Piece x Dragon Ball',
+  },
+  {
+    id: 'gpp-2',
+    prompt: 'Detective Conan investigating the mystery of missing ramen in Konoha',
+    prompt_ar: 'المحقق كونان يحقق في لغز اختفاء رامن ناروتو في كونوها',
+    category: 'Conan x Naruto',
+  },
+  {
+    id: 'gpp-3',
+    prompt: 'Zoro getting lost in Sohar University campus looking for his katana',
+    prompt_ar: 'زورو يضيع في ممرات جامعة صحار وهو يبحث عن سيوفه الثلاثة',
+    category: 'Zoro x Campus',
+  },
+  {
+    id: 'gpp-4',
+    prompt: 'Gojo Satoru wearing sunglasses backwards and tripping on a banana peel',
+    prompt_ar: 'غوجو ساتورو يرتدي نظارته بالمقلوب ويتعثر بقشرة موزة أمام الطلاب',
+    category: 'Jujutsu Kaisen',
+  },
+  {
+    id: 'gpp-5',
+    prompt: 'Pikachu angrily charging Levi Ackerman cleaning broom',
+    prompt_ar: 'بيكاتشو غاضب يشحن مكنسة ليفاي بالكهرباء أثناء التنظيف',
+    category: 'Pokemon x AoT',
+  },
+  {
+    id: 'gpp-6',
+    prompt: 'Sailor Moon fighting a giant Armored Titan using magic sparkles',
+    prompt_ar: 'سيلور مون تقاتل العملاق المدرع بعصا سحرية وبريق نجوم ملون',
+    category: 'Sailor Moon x AoT',
+  },
+  {
+    id: 'gpp-7',
+    prompt: 'Itachi using Mangekyo Sharingan to fry the perfect sunny side up egg',
+    prompt_ar: 'إيتاشي أوتشيها يستخدم الشارينغان لطهي بيضة مقلية مثالية بدون حرقها',
+    category: 'Naruto Cooking',
+  },
+  {
+    id: 'gpp-8',
+    prompt: 'Captain Tsubasa shooting a soccer ball so hard it breaks the Spacetoon logo',
+    prompt_ar: 'كابتن ماجد يسدد ضربة صاعقة في الهواء ويهدم شارة قناة سبيستون',
+    category: 'Spacetoon Sports',
+  },
+  {
+    id: 'gpp-9',
+    prompt: 'Totoro driving the Catbus through Muscat mountains under cherry blossoms',
+    prompt_ar: 'توتورو يقود حافلة القط السريعة بين جبال مسقط تحت أزهار الساكورا',
+    category: 'Ghibli Oman',
+  },
+  {
+    id: 'gpp-10',
+    prompt: 'Light Yagami writing a grocery shopping list in the Death Note',
+    prompt_ar: 'لايت ياغامي يكتب قائمة مشتريات البقالة بالغلط في مذكرة الموت',
+    category: 'Death Note',
+  },
+  {
+    id: 'gpp-11',
+    prompt: 'Tanjiro trying to teach Nezuko how to use an iPad at anime club',
+    prompt_ar: 'تانجيرو يحاول تعليم نيزوكو كيف تفتح آيباد نادي ساكورا للأنمي',
+    category: 'Demon Slayer',
+  },
+  {
+    id: 'gpp-12',
+    prompt: 'Grendizer serving hot Karak tea to the audience at university gathering',
+    prompt_ar: 'غرندايزر يصب شاي كرك ساخن لجمهور نادي ساكورا في الصالة الرئيسية',
+    category: 'Mecha x Club',
   },
 ]
 

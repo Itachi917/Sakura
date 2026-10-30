@@ -35,6 +35,7 @@ export type ActivityType =
   | 'audio_guess'
   | 'silhouette_guess'
   | 'emoji_riddle'
+  | 'gartic_phone'
 export type QuizStatus = 'draft' | 'published' | 'archived'
 export type QuestionType =
   | 'multiple_choice'
