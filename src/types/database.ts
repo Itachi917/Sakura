@@ -32,6 +32,7 @@ export type ActivityType =
   | 'sakura_feud'
   | 'draw_it_guess_it'
   | 'zoom_guess'
+  | 'audio_guess'
 export type QuizStatus = 'draft' | 'published' | 'archived'
 export type QuestionType =
   | 'multiple_choice'

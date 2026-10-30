@@ -26,7 +26,7 @@ import {
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { sound } from '@/lib/sound'
-import { getQuestionIndex, getParticipantAvatar, prepareDrawItRound } from '@/lib/gameHelpers'
+import { getQuestionIndex, getParticipantAvatar, prepareDrawItRound, getQuizQuestionsForActivity, getAudioQuestionsForSession } from '@/lib/gameHelpers'
 import type { GameSession, SessionParticipant } from '@/types/database'
 import {
   WHOS_THAT_CHARACTER_QUESTIONS,
@@ -34,10 +34,12 @@ import {
   ANIME_EXPERT_EXAM_QUESTIONS,
   SAKURA_FEUD_ROUNDS,
   ZOOM_GUESS_QUESTIONS,
+  AUDIO_GUESS_QUESTIONS,
   DRAWING_WORDS,
   type QuizQuestionData,
   type FeudQuestionData,
   type ZoomGuessQuestionData,
+  type AudioGuessQuestionData,
 } from '@/lib/gameData'
 
 interface HostControlRoomProps {
@@ -58,6 +60,7 @@ export default function HostControlRoom({ sessionId, locale = 'en' }: HostContro
   // Game data questions
   const [quizQuestions, setQuizQuestions] = useState<QuizQuestionData[]>([])
   const [zoomQuestions, setZoomQuestions] = useState<ZoomGuessQuestionData[]>(ZOOM_GUESS_QUESTIONS)
+  const [audioQuestions, setAudioQuestions] = useState<AudioGuessQuestionData[]>(AUDIO_GUESS_QUESTIONS)
   const [feudRounds, setFeudRounds] = useState<FeudQuestionData[]>(SAKURA_FEUD_ROUNDS)
 
   // Feud host state
@@ -122,12 +125,10 @@ export default function HostControlRoom({ sessionId, locale = 'en' }: HostContro
               setZoomQuestions(ZOOM_GUESS_QUESTIONS)
             }
           }
-        } else if (sess.activity_type === 'whos_that_character') {
-          setQuizQuestions(WHOS_THAT_CHARACTER_QUESTIONS)
-        } else if (sess.activity_type === 'spacetoon_nostalgia') {
-          setQuizQuestions(SPACETOON_NOSTALGIA_QUESTIONS)
-        } else if (sess.activity_type === 'anime_expert_exam') {
-          setQuizQuestions(ANIME_EXPERT_EXAM_QUESTIONS)
+        } else if (sess.activity_type === 'audio_guess' || (sess.settings as any)?.game_mode === 'audio_guess') {
+          setAudioQuestions(getAudioQuestionsForSession(sess.settings as any))
+        } else if (['whos_that_character', 'spacetoon_nostalgia', 'anime_expert_exam'].includes(sess.activity_type)) {
+          setQuizQuestions(getQuizQuestionsForActivity(sess.activity_type, sess.settings as any))
         }
 
         const { data: parts } = await supabase
@@ -498,8 +499,10 @@ export default function HostControlRoom({ sessionId, locale = 'en' }: HostContro
 
   const currentIndex = getQuestionIndex(session)
   const isZoomGame = session.activity_type === 'zoom_guess' || (session.settings as any)?.game_mode === 'zoom_guess'
+  const isAudioGame = session.activity_type === 'audio_guess' || (session.settings as any)?.game_mode === 'audio_guess'
   const totalQuestions =
     (isZoomGame ? zoomQuestions.length : 0) ||
+    (isAudioGame ? audioQuestions.length : 0) ||
     (session?.activity_type === 'draw_it_guess_it'
       ? Math.min(15, Math.max(DRAWING_WORDS.length, participants.length || 5))
       : 0) ||
@@ -509,6 +512,7 @@ export default function HostControlRoom({ sessionId, locale = 'en' }: HostContro
   const currentQuizQ = quizQuestions[currentIndex]
   const currentFeudQ = feudRounds[currentIndex]
   const currentZoomQ = isZoomGame ? (zoomQuestions[currentIndex] || zoomQuestions[0]) : null
+  const currentAudioQ = isAudioGame ? (audioQuestions[currentIndex] || audioQuestions[0]) : null
 
   const team1Members = participants.filter(p => participantTeams[p.id] === 'team1' || !participantTeams[p.id])
   const team2Members = participants.filter(p => participantTeams[p.id] === 'team2')
@@ -1034,6 +1038,48 @@ export default function HostControlRoom({ sessionId, locale = 'en' }: HostContro
                 >
                   <Eye size={16} />
                   <span>{isRtl ? 'كشف الإجابة والصورة كاملة للجمهور 👁️' : 'Reveal Answer & Full Image 👁️'}</span>
+                </button>
+              )}
+            </div>
+          )}
+
+          {isAudioGame && currentAudioQ && (
+            <div className="p-5 rounded-2xl bg-[#1d0b2e] border-2 border-pink-500/30 space-y-4">
+              <div className="flex items-center justify-between pb-3 border-b border-pink-500/20">
+                <span className="text-xs font-black uppercase text-pink-300 tracking-wider flex items-center gap-1.5">
+                  <span>🎵</span>
+                  <span>{isRtl ? 'معلومات المقطع الصوتي (للمنظم)' : 'Audio Track Intel (Host Only)'}</span>
+                </span>
+                <span className="text-xs font-mono font-bold text-amber-300">
+                  {currentAudioQ.base_points} PTS MAX
+                </span>
+              </div>
+
+              <div>
+                <h4 className="text-xl font-black text-white">
+                  {currentAudioQ.answer_ar} ({currentAudioQ.answer})
+                </h4>
+                <p className="text-xs text-pink-200/70 mt-0.5 font-bold">
+                  {isRtl ? `أنمي: ${currentAudioQ.anime_origin_ar}` : `Anime: ${currentAudioQ.anime_origin}`}
+                </p>
+                <p className="text-[11px] text-pink-300/80 mt-1">
+                  💡 {isRtl ? currentAudioQ.hint_ar : currentAudioQ.hint}
+                </p>
+              </div>
+
+              <div className="p-2.5 rounded-xl bg-black/40 border border-white/5 text-xs text-pink-200/80">
+                <span className="font-bold text-pink-300">{isRtl ? 'الأسماء المقبولة:' : 'Accepted Names:'} </span>
+                <span>{[currentAudioQ.answer, currentAudioQ.answer_ar, ...currentAudioQ.aliases].join(' • ')}</span>
+              </div>
+
+              {session.status === 'question_active' && (
+                <button
+                  onClick={() => updateSessionStatus('answer_reveal')}
+                  disabled={actionLoading}
+                  className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-500 hover:to-purple-500 text-white font-black text-sm shadow-lg flex items-center justify-center gap-2"
+                >
+                  <Eye size={16} />
+                  <span>{isRtl ? 'كشف الإجابة للجمهور 👁️' : 'Reveal Answer 👁️'}</span>
                 </button>
               )}
             </div>

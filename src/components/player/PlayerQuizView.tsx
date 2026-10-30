@@ -125,10 +125,18 @@ export default function PlayerQuizView({
       const selectedOpt = currentQuestion?.options.find(o => o.id === optionId)
       const isCorrect = !!selectedOpt?.is_correct
 
-      // Calculate score with speed bonus (awarded only upon reveal)
+      // Calculate score with speed bonus (awarded only upon reveal, just like Kahoot)
       let pointsAwarded = 0
       if (isCorrect) {
-        pointsAwarded = currentQuestion?.points || 1000
+        const maxPoints = currentQuestion?.points || 1000
+        const totalTime = currentQuestion?.time_limit_seconds || 20
+        // Kahoot formula: points scale between 50% and 100% of max points based on response speed
+        const elapsed = Math.max(0, totalTime - timeLeft)
+        const speedRatio = Math.max(0, Math.min(1, elapsed / totalTime))
+        pointsAwarded = Math.max(
+          Math.round(maxPoints * 0.5),
+          Math.round((1 - speedRatio / 2) * maxPoints)
+        )
         setEarnedPoints(pointsAwarded)
       }
 
@@ -298,9 +306,12 @@ export default function PlayerQuizView({
                 <h3 className="text-3xl font-black text-white mb-1">
                   إجابة صحيحة! 🎉
                 </h3>
-                <div className="font-mono text-2xl font-bold text-emerald-300 mt-2">
-                  +{earnedPoints} pts
+                <div className="font-mono text-2xl font-black text-emerald-300 mt-2">
+                  +{earnedPoints} {isRtl ? 'نقطة ⚡' : 'pts ⚡'}
                 </div>
+                <p className="text-xs text-emerald-200/80 mt-1 font-semibold">
+                  {isRtl ? 'احتساب النقاط حسب سرعة الإجابة (نظام كاهوت ⚡)' : 'Kahoot-style speed points awarded! ⚡'}
+                </p>
               </>
             ) : (
               <>

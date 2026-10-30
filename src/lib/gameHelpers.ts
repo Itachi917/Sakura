@@ -1,5 +1,13 @@
 import type { GameSession, SessionParticipant } from '@/types/database'
-import { DRAWING_WORDS } from './gameData'
+import {
+  DRAWING_WORDS,
+  WHOS_THAT_CHARACTER_QUESTIONS,
+  SPACETOON_NOSTALGIA_QUESTIONS,
+  ANIME_EXPERT_EXAM_QUESTIONS,
+  AUDIO_GUESS_QUESTIONS,
+  type QuizQuestionData,
+  type AudioGuessQuestionData,
+} from './gameData'
 
 /**
  * Extracts question index from session settings JSON
@@ -115,4 +123,68 @@ export function getMaskedWordHint(
       return isArabic ? 'ـ' : '_'
     })
     .join(' ')
+}
+
+/**
+ * Loads quiz questions for an activity, checking session settings first,
+ * then localStorage for admin customizations, and finally falling back to defaults.
+ */
+export function getQuizQuestionsForActivity(
+  activityType: string,
+  sessionSettings?: Record<string, unknown> | null
+): QuizQuestionData[] {
+  // 1. Session payload
+  if (sessionSettings) {
+    const customQs = sessionSettings.quiz_questions
+    if (Array.isArray(customQs) && customQs.length > 0) {
+      return customQs as QuizQuestionData[]
+    }
+  }
+
+  // 2. Local storage customizations
+  if (typeof window !== 'undefined') {
+    try {
+      const saved = localStorage.getItem(`sakura_custom_questions_${activityType}`)
+      if (saved) {
+        const parsed = JSON.parse(saved)
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed as QuizQuestionData[]
+        }
+      }
+    } catch {}
+  }
+
+  // 3. Defaults
+  if (activityType === 'whos_that_character') return WHOS_THAT_CHARACTER_QUESTIONS
+  if (activityType === 'spacetoon_nostalgia') return SPACETOON_NOSTALGIA_QUESTIONS
+  if (activityType === 'anime_expert_exam') return ANIME_EXPERT_EXAM_QUESTIONS
+  return WHOS_THAT_CHARACTER_QUESTIONS
+}
+
+/**
+ * Loads Audio Guess questions, checking session settings, localStorage, and defaults.
+ */
+export function getAudioQuestionsForSession(
+  sessionSettings?: Record<string, unknown> | null
+): AudioGuessQuestionData[] {
+  if (sessionSettings) {
+    const customQs = sessionSettings.audio_questions
+    if (Array.isArray(customQs) && customQs.length > 0) {
+      return customQs as AudioGuessQuestionData[]
+    }
+  }
+
+  if (typeof window !== 'undefined') {
+    try {
+      const saved = localStorage.getItem('sakura_audio_guess_questions')
+      if (saved) {
+        const parsed = JSON.parse(saved)
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed as AudioGuessQuestionData[]
+        }
+      }
+    } catch {}
+  }
+
+  return AUDIO_GUESS_QUESTIONS
 }

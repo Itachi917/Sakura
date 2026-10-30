@@ -10,15 +10,18 @@ import PlayerQuizView from './PlayerQuizView'
 import PlayerFeudView from './PlayerFeudView'
 import PlayerDrawView from './PlayerDrawView'
 import PlayerZoomGuessView from './PlayerZoomGuessView'
+import PlayerAudioGuessView from './PlayerAudioGuessView'
 import {
   WHOS_THAT_CHARACTER_QUESTIONS,
   SPACETOON_NOSTALGIA_QUESTIONS,
   ANIME_EXPERT_EXAM_QUESTIONS,
   ZOOM_GUESS_QUESTIONS,
+  AUDIO_GUESS_QUESTIONS,
   type QuizQuestionData,
   type ZoomGuessQuestionData,
+  type AudioGuessQuestionData,
 } from '@/lib/gameData'
-import { getParticipantAvatar } from '@/lib/gameHelpers'
+import { getParticipantAvatar, getQuizQuestionsForActivity, getAudioQuestionsForSession, getQuestionIndex } from '@/lib/gameHelpers'
 
 interface PlayerContainerProps {
   sessionId: string
@@ -37,6 +40,7 @@ export default function PlayerContainer({ sessionId, locale = 'en' }: PlayerCont
   const [error, setError] = useState<string | null>(null)
   const [quizQuestions, setQuizQuestions] = useState<QuizQuestionData[]>([])
   const [zoomQuestions, setZoomQuestions] = useState<ZoomGuessQuestionData[]>(ZOOM_GUESS_QUESTIONS)
+  const [audioQuestions, setAudioQuestions] = useState<AudioGuessQuestionData[]>(AUDIO_GUESS_QUESTIONS)
 
   useEffect(() => {
     async function initPlayer() {
@@ -83,12 +87,10 @@ export default function PlayerContainer({ sessionId, locale = 'en' }: PlayerCont
               setZoomQuestions(ZOOM_GUESS_QUESTIONS)
             }
           }
-        } else if (sessData.activity_type === 'whos_that_character') {
-          setQuizQuestions(WHOS_THAT_CHARACTER_QUESTIONS)
-        } else if (sessData.activity_type === 'spacetoon_nostalgia') {
-          setQuizQuestions(SPACETOON_NOSTALGIA_QUESTIONS)
-        } else if (sessData.activity_type === 'anime_expert_exam') {
-          setQuizQuestions(ANIME_EXPERT_EXAM_QUESTIONS)
+        } else if (sessData.activity_type === 'audio_guess' || (sessData.settings as any)?.game_mode === 'audio_guess') {
+          setAudioQuestions(getAudioQuestionsForSession(sessData.settings as any))
+        } else if (['whos_that_character', 'spacetoon_nostalgia', 'anime_expert_exam'].includes(sessData.activity_type)) {
+          setQuizQuestions(getQuizQuestionsForActivity(sessData.activity_type, sessData.settings as any))
         }
 
         // 2. Identify Current Participant
@@ -247,6 +249,7 @@ export default function PlayerContainer({ sessionId, locale = 'en' }: PlayerCont
   const aheadParticipant = myIndex > 0 ? sorted[myIndex - 1] : null
   const behindParticipant = myIndex !== -1 && myIndex < sorted.length - 1 ? sorted[myIndex + 1] : null
   const pointsToAhead = aheadParticipant ? Math.max(0, (aheadParticipant.score || 0) - (participant.score || 0)) : 0
+  const currentIdx = getQuestionIndex(session)
 
   return (
     <div className="min-h-screen text-white flex flex-col justify-between p-4 sm:p-6 relative select-none">
@@ -440,6 +443,23 @@ export default function PlayerContainer({ sessionId, locale = 'en' }: PlayerCont
             <PlayerDrawView
               session={session}
               participant={participant}
+              locale={locale}
+            />
+          )}
+
+        {/* AUDIO GUESS MODE */}
+        {(session.activity_type === 'audio_guess' ||
+          (session.settings as any)?.game_mode === 'audio_guess') &&
+          ['question_active', 'answer_collection_ended', 'answer_reveal', 'round_results'].includes(
+            session.status
+          ) &&
+          audioQuestions[currentIdx] && (
+            <PlayerAudioGuessView
+              session={session}
+              participant={participant}
+              currentQuestion={audioQuestions[currentIdx]}
+              questionIndex={currentIdx}
+              totalQuestions={audioQuestions.length}
               locale={locale}
             />
           )}

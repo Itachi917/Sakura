@@ -25,6 +25,7 @@ import {
   ToggleRight,
   Send,
   RefreshCw,
+  Clock,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { sound } from '@/lib/sound'
@@ -40,8 +41,20 @@ import type {
 import { generateNumericPin } from '@/lib/gameHelpers'
 import {
   ZOOM_GUESS_QUESTIONS,
+  WHOS_THAT_CHARACTER_QUESTIONS,
+  SPACETOON_NOSTALGIA_QUESTIONS,
+  ANIME_EXPERT_EXAM_QUESTIONS,
+  AUDIO_GUESS_QUESTIONS,
   type ZoomGuessQuestionData,
+  type QuizQuestionData,
+  type AudioGuessQuestionData,
 } from '@/lib/gameData'
+import {
+  Music,
+  Headphones,
+  Volume2,
+  VolumeX,
+} from 'lucide-react'
 
 interface AdminDashboardProps {
   locale?: string
@@ -54,6 +67,7 @@ const ACTIVITIES: { id: ActivityType; name: string; name_ar: string; emoji: stri
   { id: 'anime_expert_exam', name: 'Anime Expert Exam', name_ar: 'اختبار خبير الأنمي', emoji: '📚' },
   { id: 'sakura_feud', name: 'Sakura Feud', name_ar: 'فيود ساكورا', emoji: '⚔️' },
   { id: 'draw_it_guess_it', name: 'Draw It, Guess It', name_ar: 'ارسم واخمّن', emoji: '🎨' },
+  { id: 'audio_guess', name: 'Audio & OST Guess', name_ar: 'خمّن الأوست والصوت 🎵', emoji: '🎵' },
 ]
 
 const RARITIES = [
@@ -69,7 +83,7 @@ export default function AdminDashboard({ locale = 'en' }: AdminDashboardProps) {
   const isRtl = locale === 'ar'
 
   // Navigation tab
-  const [activeTab, setActiveTab] = useState<'sessions' | 'events' | 'stamps' | 'quizzes' | 'zoom_guess'>('sessions')
+  const [activeTab, setActiveTab] = useState<'sessions' | 'events' | 'stamps' | 'quizzes' | 'zoom_guess' | 'audio_guess'>('sessions')
 
   // Global Admin State
   const [loading, setLoading] = useState(true)
@@ -130,6 +144,7 @@ export default function AdminDashboard({ locale = 'en' }: AdminDashboardProps) {
   const [questionForm, setQuestionForm] = useState({
     question_text_ar: '',
     question_text: '',
+    media_url: '',
     optA_ar: '',
     optA_en: '',
     optB_ar: '',
@@ -142,6 +157,79 @@ export default function AdminDashboard({ locale = 'en' }: AdminDashboardProps) {
     points: 1000,
     time_limit_seconds: 20,
     explanation_ar: '',
+    explanation: '',
+  })
+
+  // 4b. Interactive Questions Editor State (Who's That Character, Spacetoon Nostalgia, Anime Expert Exam)
+  const [selectedQuizPkg, setSelectedQuizPkg] = useState<string>('spacetoon_nostalgia')
+  const [editingQuestionId, setEditingQuestionId] = useState<string | null>(null)
+  const [customQuestions, setCustomQuestions] = useState<Record<string, QuizQuestionData[]>>(() => {
+    const initial: Record<string, QuizQuestionData[]> = {
+      whos_that_character: WHOS_THAT_CHARACTER_QUESTIONS,
+      spacetoon_nostalgia: SPACETOON_NOSTALGIA_QUESTIONS,
+      anime_expert_exam: ANIME_EXPERT_EXAM_QUESTIONS,
+    }
+    if (typeof window !== 'undefined') {
+      try {
+        const pkgs = ['whos_that_character', 'spacetoon_nostalgia', 'anime_expert_exam']
+        for (const p of pkgs) {
+          const saved = localStorage.getItem(`sakura_custom_questions_${p}`)
+          if (saved) {
+            const parsed = JSON.parse(saved)
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              initial[p] = parsed
+            }
+          }
+        }
+      } catch (e) {
+        console.warn('Error reading quiz questions from localStorage:', e)
+      }
+    }
+    return initial
+  })
+
+  // 4c. Audio & OST Guess Questions State
+  const [audioQuestions, setAudioQuestions] = useState<AudioGuessQuestionData[]>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem('sakura_audio_guess_questions')
+        if (stored) {
+          const parsed = JSON.parse(stored)
+          if (Array.isArray(parsed) && parsed.length > 0) return parsed
+        }
+      } catch (e) {
+        console.warn('Error reading audio questions from localStorage:', e)
+      }
+    }
+    return AUDIO_GUESS_QUESTIONS
+  })
+  const [showAudioModal, setShowAudioModal] = useState(false)
+  const [editingAudioId, setEditingAudioId] = useState<string | null>(null)
+  const [playingAudioId, setPlayingAudioId] = useState<string | null>(null)
+  const [audioForm, setAudioForm] = useState({
+    title: '',
+    title_ar: '',
+    audio_url: '',
+    answer: '',
+    answer_ar: '',
+    aliases: '',
+    anime_origin: '',
+    anime_origin_ar: '',
+    hint: '',
+    hint_ar: '',
+    image_url: '',
+    total_time_seconds: 30,
+    base_points: 1000,
+    hasOptions: true,
+    optA_text: '',
+    optA_text_ar: '',
+    optB_text: '',
+    optB_text_ar: '',
+    optC_text: '',
+    optC_text_ar: '',
+    optD_text: '',
+    optD_text_ar: '',
+    correctIndex: 0,
   })
 
   // 5. Zoom & Guess Questions State (Persisted in localStorage & Supabase)
@@ -322,6 +410,13 @@ export default function AdminDashboard({ locale = 'en' }: AdminDashboardProps) {
         settingsPayload.game_mode = 'draw_it_guess_it'
         settingsPayload.round_duration = 60
       }
+      if (selectedActivity === 'audio_guess') {
+        settingsPayload.game_mode = 'audio_guess'
+        settingsPayload.audio_questions = audioQuestions
+      }
+      if (['whos_that_character', 'spacetoon_nostalgia', 'anime_expert_exam'].includes(selectedActivity)) {
+        settingsPayload.quiz_questions = customQuestions[selectedActivity] || []
+      }
 
       let { data: newSess, error } = await supabase
         .from('game_sessions')
@@ -337,6 +432,23 @@ export default function AdminDashboard({ locale = 'en' }: AdminDashboardProps) {
         .single()
 
       // If enum not yet migrated in Supabase, fallback cleanly
+      if (error && selectedActivity === 'audio_guess') {
+        const fallbackRes = await supabase
+          .from('game_sessions')
+          .insert({
+            activity_type: 'whos_that_character',
+            room_pin: pin,
+            status: 'lobby',
+            host_id: user?.id || dummyAdminId,
+            settings: { question_index: 0, game_mode: 'audio_guess', audio_questions: audioQuestions } as unknown as import('@/types/database').Json,
+            created_at: new Date().toISOString(),
+          })
+          .select()
+          .single()
+        newSess = fallbackRes.data
+        error = fallbackRes.error
+      }
+
       if (error && selectedActivity === 'zoom_guess') {
         const fallbackRes = await supabase
           .from('game_sessions')
@@ -557,6 +669,306 @@ export default function AdminDashboard({ locale = 'en' }: AdminDashboardProps) {
     }
   }
 
+  // --- Quiz Questions Handlers ---
+  const handleOpenAddQuestion = (pkgId: string) => {
+    setSelectedQuizPkg(pkgId)
+    setEditingQuestionId(null)
+    setQuestionForm({
+      question_text_ar: '',
+      question_text: '',
+      media_url: '',
+      optA_ar: '',
+      optA_en: '',
+      optB_ar: '',
+      optB_en: '',
+      optC_ar: '',
+      optC_en: '',
+      optD_ar: '',
+      optD_en: '',
+      correctIndex: 0,
+      points: 1000,
+      time_limit_seconds: 20,
+      explanation_ar: '',
+      explanation: '',
+    })
+    setShowQuestionModal(true)
+  }
+
+  const handleOpenEditQuestion = (pkgId: string, q: QuizQuestionData) => {
+    setSelectedQuizPkg(pkgId)
+    setEditingQuestionId(q.id)
+    const optA = q.options[0] || { text: '', text_ar: '', is_correct: false }
+    const optB = q.options[1] || { text: '', text_ar: '', is_correct: false }
+    const optC = q.options[2] || { text: '', text_ar: '', is_correct: false }
+    const optD = q.options[3] || { text: '', text_ar: '', is_correct: false }
+    const correctIdx = q.options.findIndex(o => o.is_correct)
+
+    setQuestionForm({
+      question_text_ar: q.question_text_ar || '',
+      question_text: q.question_text || '',
+      media_url: q.media_url || '',
+      optA_ar: optA.text_ar || optA.text || '',
+      optA_en: optA.text || '',
+      optB_ar: optB.text_ar || optB.text || '',
+      optB_en: optB.text || '',
+      optC_ar: optC.text_ar || optC.text || '',
+      optC_en: optC.text || '',
+      optD_ar: optD.text_ar || optD.text || '',
+      optD_en: optD.text || '',
+      correctIndex: correctIdx >= 0 ? correctIdx : 0,
+      points: q.points || 1000,
+      time_limit_seconds: q.time_limit_seconds || 20,
+      explanation_ar: q.explanation_ar || '',
+      explanation: q.explanation || '',
+    })
+    setShowQuestionModal(true)
+  }
+
+  const handleSaveQuizQuestion = async (e: React.FormEvent) => {
+    e.preventDefault()
+    sound.playClick()
+
+    const pkgId = selectedQuizPkg
+    const currentList = customQuestions[pkgId] || []
+
+    const formattedOptions = [
+      { id: 'opt-a', text: questionForm.optA_en || questionForm.optA_ar, text_ar: questionForm.optA_ar || questionForm.optA_en, is_correct: questionForm.correctIndex === 0 },
+      { id: 'opt-b', text: questionForm.optB_en || questionForm.optB_ar, text_ar: questionForm.optB_ar || questionForm.optB_en, is_correct: questionForm.correctIndex === 1 },
+      { id: 'opt-c', text: questionForm.optC_en || questionForm.optC_ar, text_ar: questionForm.optC_ar || questionForm.optC_en, is_correct: questionForm.correctIndex === 2 },
+      { id: 'opt-d', text: questionForm.optD_en || questionForm.optD_ar, text_ar: questionForm.optD_ar || questionForm.optD_en, is_correct: questionForm.correctIndex === 3 },
+    ]
+
+    let updatedList: QuizQuestionData[]
+    if (editingQuestionId) {
+      updatedList = currentList.map(item => {
+        if (item.id === editingQuestionId) {
+          return {
+            ...item,
+            question_text_ar: questionForm.question_text_ar.trim() || item.question_text_ar,
+            question_text: questionForm.question_text.trim() || item.question_text,
+            media_url: questionForm.media_url.trim() || undefined,
+            time_limit_seconds: Number(questionForm.time_limit_seconds) || 20,
+            points: Number(questionForm.points) || 1000,
+            explanation_ar: questionForm.explanation_ar.trim() || undefined,
+            explanation: questionForm.explanation.trim() || undefined,
+            options: formattedOptions,
+          }
+        }
+        return item
+      })
+    } else {
+      const newQuestion: QuizQuestionData = {
+        id: `custom-${pkgId}-${Date.now()}`,
+        question_text_ar: questionForm.question_text_ar.trim() || 'سؤال ساكورا التفاعلي',
+        question_text: questionForm.question_text.trim() || 'Sakura Quiz Question',
+        question_type: questionForm.media_url ? 'image_question' : 'multiple_choice',
+        media_url: questionForm.media_url.trim() || undefined,
+        time_limit_seconds: Number(questionForm.time_limit_seconds) || 20,
+        points: Number(questionForm.points) || 1000,
+        explanation_ar: questionForm.explanation_ar.trim() || undefined,
+        explanation: questionForm.explanation.trim() || undefined,
+        options: formattedOptions,
+      }
+      updatedList = [...currentList, newQuestion]
+    }
+
+    setCustomQuestions(prev => ({ ...prev, [pkgId]: updatedList }))
+    try {
+      localStorage.setItem(`sakura_custom_questions_${pkgId}`, JSON.stringify(updatedList))
+    } catch {}
+
+    sound.playCorrect()
+    showFeedback(isRtl ? 'تم حفظ السؤال وتحديث بنك الأسئلة بنجاح! 🌸' : 'Question saved and bank updated! 🌸')
+    setShowQuestionModal(false)
+  }
+
+  const handleDeleteQuizQuestion = (pkgId: string, qId: string) => {
+    if (!confirm(isRtl ? 'هل أنت متأكد من حذف هذا السؤال؟' : 'Delete this question?')) return
+    sound.playClick()
+    const currentList = customQuestions[pkgId] || []
+    const updated = currentList.filter(item => item.id !== qId)
+    setCustomQuestions(prev => ({ ...prev, [pkgId]: updated }))
+    try {
+      localStorage.setItem(`sakura_custom_questions_${pkgId}`, JSON.stringify(updated))
+    } catch {}
+    showFeedback(isRtl ? 'تم حذف السؤال' : 'Question deleted')
+  }
+
+  const handleResetQuizPackage = (pkgId: string) => {
+    if (!confirm(isRtl ? 'استعادة الأسئلة الافتراضية الأصلية لهذه الحزمة؟' : 'Reset this quiz to original defaults?')) return
+    sound.playClick()
+    let defaults = WHOS_THAT_CHARACTER_QUESTIONS
+    if (pkgId === 'spacetoon_nostalgia') defaults = SPACETOON_NOSTALGIA_QUESTIONS
+    if (pkgId === 'anime_expert_exam') defaults = ANIME_EXPERT_EXAM_QUESTIONS
+
+    setCustomQuestions(prev => ({ ...prev, [pkgId]: defaults }))
+    try {
+      localStorage.removeItem(`sakura_custom_questions_${pkgId}`)
+    } catch {}
+    showFeedback(isRtl ? 'تمت استعادة بنك الأسئلة الافتراضي' : 'Default questions restored')
+  }
+
+  // --- Audio Guess Handlers ---
+  const handleOpenAddAudio = () => {
+    setEditingAudioId(null)
+    setAudioForm({
+      title: 'Guess the anime from this theme song!',
+      title_ar: 'خمّن الأنمي الشهير من هذا المقطع الصوتي!',
+      audio_url: 'https://upload.wikimedia.org/wikipedia/commons/4/4b/Japanese_classical_music_flute.ogg',
+      answer: '',
+      answer_ar: '',
+      aliases: '',
+      anime_origin: '',
+      anime_origin_ar: '',
+      hint: '',
+      hint_ar: '',
+      image_url: '',
+      total_time_seconds: 30,
+      base_points: 1000,
+      hasOptions: true,
+      optA_text: '',
+      optA_text_ar: '',
+      optB_text: '',
+      optB_text_ar: '',
+      optC_text: '',
+      optC_text_ar: '',
+      optD_text: '',
+      optD_text_ar: '',
+      correctIndex: 0,
+    })
+    setShowAudioModal(true)
+  }
+
+  const handleOpenEditAudio = (q: AudioGuessQuestionData) => {
+    setEditingAudioId(q.id)
+    const optA = q.options?.[0] || { text: '', text_ar: '', is_correct: false }
+    const optB = q.options?.[1] || { text: '', text_ar: '', is_correct: false }
+    const optC = q.options?.[2] || { text: '', text_ar: '', is_correct: false }
+    const optD = q.options?.[3] || { text: '', text_ar: '', is_correct: false }
+    const correctIdx = q.options ? q.options.findIndex(o => o.is_correct) : 0
+
+    setAudioForm({
+      title: q.title,
+      title_ar: q.title_ar,
+      audio_url: q.audio_url,
+      answer: q.answer,
+      answer_ar: q.answer_ar,
+      aliases: q.aliases ? q.aliases.join(', ') : '',
+      anime_origin: q.anime_origin,
+      anime_origin_ar: q.anime_origin_ar,
+      hint: q.hint,
+      hint_ar: q.hint_ar,
+      image_url: q.image_url || '',
+      total_time_seconds: q.total_time_seconds || 30,
+      base_points: q.base_points || 1000,
+      hasOptions: Array.isArray(q.options) && q.options.length > 0,
+      optA_text: optA.text || '',
+      optA_text_ar: optA.text_ar || '',
+      optB_text: optB.text || '',
+      optB_text_ar: optB.text_ar || '',
+      optC_text: optC.text || '',
+      optC_text_ar: optC.text_ar || '',
+      optD_text: optD.text || '',
+      optD_text_ar: optD.text_ar || '',
+      correctIndex: correctIdx >= 0 ? correctIdx : 0,
+    })
+    setShowAudioModal(true)
+  }
+
+  const handleSaveAudioQuestion = (e: React.FormEvent) => {
+    e.preventDefault()
+    sound.playClick()
+
+    const parsedAliases = audioForm.aliases
+      .split(/[,،]/)
+      .map(a => a.trim())
+      .filter(Boolean)
+
+    const options = audioForm.hasOptions
+      ? [
+          { id: 'opt-a', text: audioForm.optA_text || audioForm.optA_text_ar, text_ar: audioForm.optA_text_ar || audioForm.optA_text, is_correct: audioForm.correctIndex === 0 },
+          { id: 'opt-b', text: audioForm.optB_text || audioForm.optB_text_ar, text_ar: audioForm.optB_text_ar || audioForm.optB_text, is_correct: audioForm.correctIndex === 1 },
+          { id: 'opt-c', text: audioForm.optC_text || audioForm.optC_text_ar, text_ar: audioForm.optC_text_ar || audioForm.optC_text, is_correct: audioForm.correctIndex === 2 },
+          { id: 'opt-d', text: audioForm.optD_text || audioForm.optD_text_ar, text_ar: audioForm.optD_text_ar || audioForm.optD_text, is_correct: audioForm.correctIndex === 3 },
+        ]
+      : undefined
+
+    let updated: AudioGuessQuestionData[]
+    if (editingAudioId) {
+      updated = audioQuestions.map(item => {
+        if (item.id === editingAudioId) {
+          return {
+            ...item,
+            title: audioForm.title.trim() || item.title,
+            title_ar: audioForm.title_ar.trim() || item.title_ar,
+            audio_url: audioForm.audio_url.trim() || item.audio_url,
+            answer: audioForm.answer.trim() || item.answer,
+            answer_ar: audioForm.answer_ar.trim() || item.answer_ar,
+            aliases: parsedAliases.length > 0 ? parsedAliases : item.aliases,
+            anime_origin: audioForm.anime_origin.trim() || item.anime_origin,
+            anime_origin_ar: audioForm.anime_origin_ar.trim() || item.anime_origin_ar,
+            hint: audioForm.hint.trim() || item.hint,
+            hint_ar: audioForm.hint_ar.trim() || item.hint_ar,
+            image_url: audioForm.image_url.trim() || undefined,
+            total_time_seconds: Number(audioForm.total_time_seconds) || 30,
+            base_points: Number(audioForm.base_points) || 1000,
+            options,
+          }
+        }
+        return item
+      })
+    } else {
+      const newAudioQ: AudioGuessQuestionData = {
+        id: `ag-custom-${Date.now()}`,
+        title: audioForm.title.trim() || 'Guess the anime from audio!',
+        title_ar: audioForm.title_ar.trim() || 'خمّن الأنمي من المقطع الصوتي!',
+        audio_url: audioForm.audio_url.trim(),
+        answer: audioForm.answer.trim(),
+        answer_ar: audioForm.answer_ar.trim() || audioForm.answer.trim(),
+        aliases: parsedAliases,
+        anime_origin: audioForm.anime_origin.trim(),
+        anime_origin_ar: audioForm.anime_origin_ar.trim() || audioForm.anime_origin.trim(),
+        hint: audioForm.hint.trim(),
+        hint_ar: audioForm.hint_ar.trim() || audioForm.hint.trim(),
+        image_url: audioForm.image_url.trim() || undefined,
+        total_time_seconds: Number(audioForm.total_time_seconds) || 30,
+        base_points: Number(audioForm.base_points) || 1000,
+        options,
+      }
+      updated = [...audioQuestions, newAudioQ]
+    }
+
+    setAudioQuestions(updated)
+    try {
+      localStorage.setItem('sakura_audio_guess_questions', JSON.stringify(updated))
+    } catch {}
+
+    sound.playCorrect()
+    showFeedback(isRtl ? 'تم حفظ المقطع الصوتي في بنك الأسئلة بنجاح! 🎵' : 'Audio track saved to question bank! 🎵')
+    setShowAudioModal(false)
+  }
+
+  const handleDeleteAudioQuestion = (id: string) => {
+    if (!confirm(isRtl ? 'هل أنت متأكد من حذف هذا المقطع الصوتي؟' : 'Delete this audio question?')) return
+    sound.playClick()
+    const updated = audioQuestions.filter(item => item.id !== id)
+    setAudioQuestions(updated)
+    try {
+      localStorage.setItem('sakura_audio_guess_questions', JSON.stringify(updated))
+    } catch {}
+    showFeedback(isRtl ? 'تم حذف المقطع الصوتي' : 'Audio track deleted')
+  }
+
+  const handleResetAudioQuestions = () => {
+    if (!confirm(isRtl ? 'استعادة المقاطع الصوتية الافتراضية الأصلية؟' : 'Reset to default audio tracks?')) return
+    sound.playClick()
+    setAudioQuestions(AUDIO_GUESS_QUESTIONS)
+    try {
+      localStorage.removeItem('sakura_audio_guess_questions')
+    } catch {}
+    showFeedback(isRtl ? 'تمت استعادة المقاطع الافتراضية' : 'Default audio tracks restored')
+  }
+
   const handleSaveQuestion = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!selectedQuizIdForQuestion) {
@@ -617,6 +1029,8 @@ export default function AdminDashboard({ locale = 'en' }: AdminDashboardProps) {
         points: 1000,
         time_limit_seconds: 20,
         explanation_ar: '',
+        explanation: '',
+        media_url: '',
       })
     } catch (err) {
       console.error('Error adding question:', err)
@@ -673,7 +1087,8 @@ export default function AdminDashboard({ locale = 'en' }: AdminDashboardProps) {
           { id: 'zoom_guess', label: isRtl ? '🔍 خمن بالزووم' : '🔍 Zoom & Guess Questions', count: zoomQuestions.length },
           { id: 'events', label: isRtl ? '📅 إدارة الفعاليات' : '📅 Campus Events', count: events.length },
           { id: 'stamps', label: isRtl ? '🎖️ الشارات والأختام' : '🎖️ Badges & Stamps', count: stamps.length },
-          { id: 'quizzes', label: isRtl ? '📚 بنك الأسئلة والكويز' : '📚 Quizzes & Questions', count: quizzes.length },
+          { id: 'quizzes', label: isRtl ? '📚 بنك أسئلة الكويز' : '📚 Quizzes & Questions', count: Object.values(customQuestions).reduce((acc, l) => acc + l.length, 0) },
+          { id: 'audio_guess', label: isRtl ? '🎵 خمّن الأوست والصوت' : '🎵 Audio & OST Guess', count: audioQuestions.length },
         ].map(tab => (
           <button
             key={tab.id}
@@ -1058,69 +1473,260 @@ export default function AdminDashboard({ locale = 'en' }: AdminDashboardProps) {
       {/* ============================================================ */}
       {activeTab === 'quizzes' && (
         <div className="space-y-6 animate-fade-in">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xl font-bold text-white flex items-center gap-2">
-              <BookOpen size={20} className="text-pink-400" />
-              <span>{isRtl ? 'حزم الكويزات وبنك الأسئلة' : 'Quiz Question Packages'}</span>
-            </h2>
-            <button
-              onClick={() => {
-                setQuizForm({
-                  title: '',
-                  title_ar: '',
-                  activity_type: 'whos_that_character',
-                  difficulty: 'medium',
-                })
-                setShowQuizModal(true)
-              }}
-              className="px-4 py-2.5 rounded-xl bg-pink-600 hover:bg-pink-500 text-white font-bold text-xs sm:text-sm flex items-center gap-1.5 shadow-lg shadow-pink-600/30"
-            >
-              <Plus size={16} />
-              <span>{isRtl ? 'إنشاء حزمة كويز جديدة' : 'Create New Quiz'}</span>
-            </button>
+          {/* Quiz Package Selector */}
+          <div className="p-4 rounded-3xl bg-black/40 border border-pink-500/20 backdrop-blur-xl flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <span className="text-xs uppercase font-bold text-pink-300 block mb-1">
+                {isRtl ? 'اختر حزمة الكويز لتعديل أسئلتها:' : 'Select Quiz Package to Edit Questions:'}
+              </span>
+              <div className="flex flex-wrap items-center gap-2">
+                {[
+                  { id: 'spacetoon_nostalgia', name: isRtl ? '📺 نوستالجيا سبيستون' : '📺 Spacetoon Nostalgia', count: customQuestions['spacetoon_nostalgia']?.length || 0 },
+                  { id: 'whos_that_character', name: isRtl ? '🎭 من هذه الشخصية؟' : "🎭 Who's That Character?", count: customQuestions['whos_that_character']?.length || 0 },
+                  { id: 'anime_expert_exam', name: isRtl ? '📚 اختبار خبير الأنمي' : '📚 Anime Expert Exam', count: customQuestions['anime_expert_exam']?.length || 0 },
+                ].map(pkg => (
+                  <button
+                    key={pkg.id}
+                    onClick={() => {
+                      setSelectedQuizPkg(pkg.id)
+                      sound.playClick()
+                    }}
+                    className={`px-4 py-2 rounded-2xl font-bold text-xs sm:text-sm transition-all flex items-center gap-2 ${
+                      selectedQuizPkg === pkg.id
+                        ? 'bg-gradient-to-r from-pink-600 to-purple-600 text-white shadow-lg shadow-pink-600/30'
+                        : 'bg-white/5 text-pink-200/70 hover:bg-white/10'
+                    }`}
+                  >
+                    <span>{pkg.name}</span>
+                    <span className="px-2 py-0.5 rounded-full bg-black/40 text-[11px] font-mono">{pkg.count}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Package Actions */}
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => handleResetQuizPackage(selectedQuizPkg)}
+                className="px-3.5 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-pink-300 font-bold text-xs flex items-center gap-1.5 border border-pink-500/20 transition-colors"
+                title={isRtl ? 'استعادة الأسئلة الافتراضية' : 'Reset to Curated Defaults'}
+              >
+                <RefreshCw size={14} />
+                <span>{isRtl ? 'استعادة الافتراضي' : 'Reset Defaults'}</span>
+              </button>
+
+              <button
+                onClick={() => handleOpenAddQuestion(selectedQuizPkg)}
+                className="px-4 py-2 rounded-xl bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-500 text-white font-extrabold text-xs sm:text-sm flex items-center gap-1.5 shadow-lg shadow-pink-600/30"
+              >
+                <Plus size={16} />
+                <span>{isRtl ? 'إضافة سؤال جديد 🌸' : 'Add Question 🌸'}</span>
+              </button>
+            </div>
           </div>
 
-          {/* Quizzes List */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {quizzes.map(q => (
+          {/* Active Questions Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            {(customQuestions[selectedQuizPkg] || []).map((q, idx) => {
+              const correctOpt = q.options.find(o => o.is_correct)
+              return (
+                <div
+                  key={q.id}
+                  className="p-5 rounded-3xl bg-black/40 border-2 border-pink-500/20 backdrop-blur-xl flex flex-col justify-between gap-4 hover:border-pink-400/40 transition-all shadow-xl"
+                >
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between pb-2 border-b border-white/5">
+                      <span className="px-2.5 py-0.5 rounded-full bg-pink-500/20 text-pink-300 font-mono text-xs font-bold border border-pink-400/30">
+                        #{idx + 1} • {q.points || 1000} PTS
+                      </span>
+                      <span className="text-xs text-amber-300 font-mono font-bold flex items-center gap-1">
+                        <Clock size={13} />
+                        <span>{q.time_limit_seconds || 20}s (Kahoot Speed)</span>
+                      </span>
+                    </div>
+
+                    <div>
+                      <h4 className="text-base font-black text-white leading-snug">
+                        {isRtl ? q.question_text_ar : q.question_text}
+                      </h4>
+                      {q.question_text && q.question_text !== q.question_text_ar && (
+                        <p className="text-xs text-pink-200/60 mt-0.5">
+                          {q.question_text}
+                        </p>
+                      )}
+                    </div>
+
+                    {/* 4 Options Preview */}
+                    <div className="grid grid-cols-2 gap-2 pt-1">
+                      {q.options.map((opt, optIdx) => (
+                        <div
+                          key={opt.id || optIdx}
+                          className={`p-2 rounded-xl text-xs flex items-center justify-between gap-1.5 border ${
+                            opt.is_correct
+                              ? 'bg-emerald-500/20 border-emerald-400 text-emerald-200 font-bold'
+                              : 'bg-white/5 border-white/5 text-gray-300'
+                          }`}
+                        >
+                          <span className="truncate">{opt.text_ar || opt.text}</span>
+                          {opt.is_correct && <CheckCircle2 size={13} className="text-emerald-400 shrink-0" />}
+                        </div>
+                      ))}
+                    </div>
+
+                    {q.explanation_ar && (
+                      <p className="text-[11px] text-pink-200/60 bg-white/5 p-2 rounded-xl border border-white/5">
+                        <span className="font-bold text-pink-300">💡 {isRtl ? 'الملاحظة:' : 'Note:'} </span>
+                        <span>{q.explanation_ar}</span>
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Actions: Edit & Delete */}
+                  <div className="flex items-center justify-between pt-3 border-t border-white/5">
+                    <button
+                      onClick={() => handleOpenEditQuestion(selectedQuizPkg, q)}
+                      className="px-3.5 py-1.5 rounded-xl bg-pink-600/30 hover:bg-pink-600/50 text-pink-200 font-bold text-xs flex items-center gap-1.5 border border-pink-400/30 transition-all"
+                    >
+                      <Edit2 size={13} />
+                      <span>{isRtl ? 'تعديل السؤال' : 'Edit Question'}</span>
+                    </button>
+
+                    <button
+                      onClick={() => handleDeleteQuizQuestion(selectedQuizPkg, q.id)}
+                      className="p-1.5 rounded-lg text-rose-400 hover:bg-rose-500/20 transition-colors"
+                      title={isRtl ? 'حذف السؤال' : 'Delete'}
+                    >
+                      <Trash2 size={15} />
+                    </button>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================ */}
+      {/* TAB 4B: AUDIO & OST GUESS QUESTIONS */}
+      {/* ============================================================ */}
+      {activeTab === 'audio_guess' && (
+        <div className="space-y-6 animate-fade-in">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div>
+              <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                <Music size={22} className="text-pink-400" />
+                <span>{isRtl ? 'بنك مقاطع الصوت والأوست (Audio & OST Guess)' : 'Audio & OST Guess Bank'}</span>
+              </h2>
+              <p className="text-xs text-pink-200/70 mt-1">
+                {isRtl
+                  ? 'يستمع اللاعبون للمقطع الصوتي أو شارة البداية، ويخمنون الأنمي أو الأوست بأسرع ما يمكن!'
+                  : 'Players listen to the audio track or OST, and race to guess the anime title for speed points!'}
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2 flex-wrap">
+              <button
+                type="button"
+                onClick={handleResetAudioQuestions}
+                className="px-3.5 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-pink-300 font-bold text-xs sm:text-sm flex items-center gap-1.5 border border-pink-500/20 transition-colors"
+                title={isRtl ? 'استعادة المقاطع الافتراضية' : 'Reset to Curated Defaults'}
+              >
+                <RefreshCw size={14} />
+                <span>{isRtl ? 'استعادة الافتراضي' : 'Reset Defaults'}</span>
+              </button>
+
+              <button
+                onClick={handleOpenAddAudio}
+                className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-500 hover:to-purple-500 text-white font-extrabold text-xs sm:text-sm flex items-center gap-1.5 shadow-lg shadow-pink-600/30"
+              >
+                <Plus size={16} />
+                <span>{isRtl ? 'إضافة مقطع صوتي جديد 🎵' : 'Add Audio Track 🎵'}</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Audio Tracks Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+            {audioQuestions.map((q, idx) => (
               <div
                 key={q.id}
-                className="p-6 rounded-3xl bg-black/40 border border-pink-500/20 backdrop-blur-xl flex flex-col justify-between gap-4"
+                className="rounded-3xl bg-black/40 border-2 border-pink-500/20 backdrop-blur-xl p-5 flex flex-col justify-between hover:border-pink-400/40 transition-all shadow-xl space-y-4"
               >
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs uppercase px-2.5 py-0.5 rounded-full bg-pink-500/20 text-pink-300 font-bold border border-pink-400/20">
-                      {q.activity_type.replace(/_/g, ' ')}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between pb-2 border-b border-pink-500/15">
+                    <span className="px-2.5 py-0.5 rounded-full bg-pink-500/20 text-pink-300 font-mono text-xs font-bold border border-pink-400/30">
+                      Track #{idx + 1} • {q.base_points} PTS
                     </span>
-                    <span className="text-xs text-pink-200/50 uppercase font-mono">{q.difficulty}</span>
+                    <span className="text-xs text-amber-300 font-mono font-bold flex items-center gap-1">
+                      <Clock size={13} />
+                      <span>{q.total_time_seconds}s</span>
+                    </span>
                   </div>
-                  <h3 className="text-lg font-black text-white">
-                    {isRtl ? q.title_ar || q.title : q.title}
-                  </h3>
+
+                  {/* Audio Player Bar */}
+                  <div className="p-3 rounded-2xl bg-[#1d0b2e] border border-pink-500/20 flex flex-col gap-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2 text-pink-300 text-xs font-bold">
+                        <Headphones size={15} />
+                        <span>{isRtl ? 'استماع ومعاينة المقطع' : 'Audio Player Preview'}</span>
+                      </div>
+                    </div>
+                    <audio controls src={q.audio_url} className="w-full h-8 mt-1" />
+                  </div>
+
+                  <div>
+                    <span className="text-[10px] uppercase font-bold text-pink-400 tracking-wider">
+                      {isRtl ? q.anime_origin_ar || q.anime_origin : q.anime_origin}
+                    </span>
+                    <h3 className="text-lg font-black text-white mt-0.5">
+                      {isRtl ? q.answer_ar : q.answer}
+                    </h3>
+                    <div className="text-xs text-pink-200/70 font-semibold">
+                      ({q.answer})
+                    </div>
+                  </div>
+
+                  <div className="p-2.5 rounded-xl bg-white/5 border border-white/5 text-xs text-pink-100/70">
+                    <span className="font-bold text-pink-300">💡 {isRtl ? 'التلميح:' : 'Clue:'} </span>
+                    <span>{isRtl ? q.hint_ar : q.hint}</span>
+                  </div>
+
+                  {q.aliases && q.aliases.length > 0 && (
+                    <div>
+                      <span className="text-[10px] uppercase font-bold text-pink-300/70 block mb-1">
+                        {isRtl ? 'الأسماء المقبولة:' : 'Accepted Aliases:'}
+                      </span>
+                      <div className="flex flex-wrap gap-1">
+                        {q.aliases.map((a, i) => (
+                          <span
+                            key={i}
+                            className="px-2 py-0.5 rounded-md bg-pink-500/10 border border-pink-400/20 text-[10px] text-pink-200"
+                          >
+                            {a}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
 
-                <div className="flex items-center justify-between pt-3 border-t border-white/5">
+                {/* Actions */}
+                <div className="p-2 border-t border-white/5 flex items-center justify-between">
                   <button
-                    onClick={() => {
-                      setSelectedQuizIdForQuestion(q.id)
-                      setShowQuestionModal(true)
-                    }}
-                    className="px-3 py-1.5 rounded-xl bg-pink-600 hover:bg-pink-500 text-white font-bold text-xs flex items-center gap-1"
+                    onClick={() => handleOpenEditAudio(q)}
+                    className="px-3 py-1.5 rounded-xl bg-pink-600/30 hover:bg-pink-600/50 text-pink-200 font-bold text-xs flex items-center gap-1.5 border border-pink-400/30 transition-all"
                   >
-                    <Plus size={14} />
-                    <span>{isRtl ? 'إضافة سؤال بالعربية' : 'Add Arabic Question'}</span>
+                    <Edit2 size={13} />
+                    <span>{isRtl ? 'تعديل المقطع' : 'Edit Track'}</span>
                   </button>
 
                   <button
-                    onClick={async () => {
-                      if (!confirm(isRtl ? 'حذف هذا الكويز؟' : 'Delete this quiz?')) return
-                      await supabase.from('quizzes').delete().eq('id', q.id)
-                      setQuizzes(prev => prev.filter(item => item.id !== q.id))
-                      showFeedback(isRtl ? 'تم حذف الكويز' : 'Quiz deleted')
-                    }}
-                    className="p-1.5 rounded-lg text-red-400 hover:bg-red-500/20"
+                    onClick={() => handleDeleteAudioQuestion(q.id)}
+                    className="p-1.5 rounded-lg text-rose-400 hover:bg-rose-500/20 transition-colors"
+                    title={isRtl ? 'حذف' : 'Delete'}
                   >
-                    <Trash2 size={16} />
+                    <Trash2 size={15} />
                   </button>
                 </div>
               </div>
@@ -1129,7 +1735,6 @@ export default function AdminDashboard({ locale = 'en' }: AdminDashboardProps) {
         </div>
       )}
 
-      {/* ============================================================ */}
       {/* TAB 5: ZOOM & GUESS QUESTIONS MANAGEMENT */}
       {/* ============================================================ */}
       {activeTab === 'zoom_guess' && (
@@ -1554,64 +2159,103 @@ export default function AdminDashboard({ locale = 'en' }: AdminDashboardProps) {
       )}
 
       {/* ============================================================ */}
-      {/* MODAL 4: ADD ARABIC QUESTION TO QUIZ */}
+      {/* MODAL 4: ADD / EDIT QUIZ QUESTION */}
       {/* ============================================================ */}
       {showQuestionModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md animate-fade-in overflow-y-auto">
           <div className="w-full max-w-xl bg-[#20102c] border-2 border-pink-500/30 rounded-3xl p-6 sm:p-8 shadow-2xl relative my-8">
             <h3 className="text-xl font-black text-white mb-2">
-              {isRtl ? 'إضافة سؤال جديد باللغة العربية 🌸' : 'Add New Question in Arabic 🌸'}
+              {editingQuestionId
+                ? (isRtl ? 'تعديل السؤال في بنك الأسئلة ✏️' : 'Edit Question in Bank ✏️')
+                : (isRtl ? 'إضافة سؤال جديد لحزمة الكويز 🌸' : 'Add New Question to Quiz 🌸')}
             </h3>
             <p className="text-xs text-pink-200/70 mb-4">
-              {isRtl ? 'اكتب نص السؤال والخيارات بالعربية مع تحديد الإجابة الصحيحة' : 'Enter question text, 4 choices, and mark the correct option'}
+              {isRtl ? 'اكتب نص السؤال بالعربية والإنجليزية مع تحديد الخيار الصحيح ونقاط السؤال' : 'Enter question text, options, and select the correct answer'}
             </p>
 
-            <form onSubmit={handleSaveQuestion} className="space-y-4 text-xs sm:text-sm">
+            <form onSubmit={handleSaveQuizQuestion} className="space-y-4 text-xs sm:text-sm">
               <div>
                 <label className="block text-pink-200 font-bold mb-1">
-                  {isRtl ? 'نص السؤال بالعربية (الأساسي)' : 'Question Text in Arabic (Primary)'}
+                  {isRtl ? 'نص السؤال بالعربية (الأساسي)' : 'Question Text (Arabic - Primary)'}
                 </label>
                 <textarea
                   value={questionForm.question_text_ar}
                   onChange={e => setQuestionForm({ ...questionForm, question_text_ar: e.target.value })}
-                  placeholder="مثال: من هو بطل ون بيس الذي يحلم بأن يصبح ملك القراصنة؟"
+                  placeholder="مثال: في شارة أبطال الديجيتال، أكمل: في فخ غريب وقعنا.. في عالم الأرقام ____؟"
                   rows={2}
                   className="w-full p-2.5 rounded-xl bg-black/50 border border-pink-400/30 text-white"
                   required
                 />
               </div>
 
+              <div>
+                <label className="block text-pink-200 font-bold mb-1">
+                  {isRtl ? 'ترجمة السؤال بالإنجليزية (اختياري)' : 'Question Text (English - Optional)'}
+                </label>
+                <input
+                  type="text"
+                  value={questionForm.question_text}
+                  onChange={e => setQuestionForm({ ...questionForm, question_text: e.target.value })}
+                  placeholder="e.g. Complete the Digimon Adventure opening lyrics..."
+                  className="w-full p-2 rounded-xl bg-black/50 border border-pink-400/30 text-white"
+                />
+              </div>
+
+              <div>
+                <label className="block text-pink-200 font-bold mb-1">
+                  {isRtl ? 'رابط الصورة التوضيحية (اختياري)' : 'Image / Media URL (Optional)'}
+                </label>
+                <input
+                  type="url"
+                  value={questionForm.media_url}
+                  onChange={e => setQuestionForm({ ...questionForm, media_url: e.target.value })}
+                  placeholder="https://..."
+                  className="w-full p-2 rounded-xl bg-black/50 border border-pink-400/30 text-white"
+                />
+              </div>
+
               {/* 4 CHOICES */}
               <div className="space-y-2">
                 <label className="block text-pink-200 font-bold">
-                  {isRtl ? 'الخيارات الأربعة (حدد الإجابة الصحيحة):' : '4 Choices (Select Correct One):'}
+                  {isRtl ? 'الخيارات الأربعة (حدد الدائرة بجانب الإجابة الصحيحة):' : '4 Choices (Select correct radio button):'}
                 </label>
 
                 {[
-                  { key: 'optA_ar', label: 'A', idx: 0 },
-                  { key: 'optB_ar', label: 'B', idx: 1 },
-                  { key: 'optC_ar', label: 'C', idx: 2 },
-                  { key: 'optD_ar', label: 'D', idx: 3 },
+                  { arKey: 'optA_ar', enKey: 'optA_en', label: 'A', idx: 0 },
+                  { arKey: 'optB_ar', enKey: 'optB_en', label: 'B', idx: 1 },
+                  { arKey: 'optC_ar', enKey: 'optC_en', label: 'C', idx: 2 },
+                  { arKey: 'optD_ar', enKey: 'optD_en', label: 'D', idx: 3 },
                 ].map(item => (
-                  <div key={item.key} className="flex items-center gap-2">
+                  <div key={item.arKey} className="flex items-center gap-2">
                     <input
                       type="radio"
                       name="correctChoice"
                       id={`correct_${item.idx}`}
                       checked={questionForm.correctIndex === item.idx}
                       onChange={() => setQuestionForm({ ...questionForm, correctIndex: item.idx })}
-                      className="w-4 h-4 text-emerald-500 focus:ring-0"
+                      className="w-4 h-4 text-emerald-500 focus:ring-0 cursor-pointer"
                     />
-                    <span className="w-7 h-7 rounded-lg bg-pink-500/20 text-pink-300 font-black flex items-center justify-center shrink-0">
+                    <span className={`w-7 h-7 rounded-lg font-black flex items-center justify-center shrink-0 ${
+                      questionForm.correctIndex === item.idx
+                        ? 'bg-emerald-500 text-white shadow-md'
+                        : 'bg-pink-500/20 text-pink-300'
+                    }`}>
                       {item.label}
                     </span>
                     <input
                       type="text"
-                      value={questionForm[item.key as keyof typeof questionForm] as string}
-                      onChange={e => setQuestionForm({ ...questionForm, [item.key]: e.target.value })}
-                      placeholder={isRtl ? `الخيار ${item.label} بالعربية` : `Choice ${item.label} in Arabic`}
+                      value={questionForm[item.arKey as keyof typeof questionForm] as string}
+                      onChange={e => setQuestionForm({ ...questionForm, [item.arKey]: e.target.value })}
+                      placeholder={isRtl ? `الخيار ${item.label} بالعربية` : `Choice ${item.label} (Arabic)`}
                       className="flex-1 p-2 rounded-xl bg-black/50 border border-pink-400/30 text-white text-xs"
                       required
+                    />
+                    <input
+                      type="text"
+                      value={questionForm[item.enKey as keyof typeof questionForm] as string}
+                      onChange={e => setQuestionForm({ ...questionForm, [item.enKey]: e.target.value })}
+                      placeholder={isRtl ? 'الإنجليزية (اختياري)' : 'English'}
+                      className="w-1/3 p-2 rounded-xl bg-black/50 border border-pink-400/30 text-white text-xs"
                     />
                   </div>
                 ))}
@@ -1620,7 +2264,7 @@ export default function AdminDashboard({ locale = 'en' }: AdminDashboardProps) {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-pink-200 font-bold mb-1">
-                    {isRtl ? 'النقاط' : 'Points'}
+                    {isRtl ? 'النقاط القصوى' : 'Max Points'}
                   </label>
                   <input
                     type="number"
@@ -1631,7 +2275,7 @@ export default function AdminDashboard({ locale = 'en' }: AdminDashboardProps) {
                 </div>
                 <div>
                   <label className="block text-pink-200 font-bold mb-1">
-                    {isRtl ? 'وقت الإجابة (ثواني)' : 'Time Limit (Seconds)'}
+                    {isRtl ? 'وقت الإجابة (ثواني - نظام كاهوت)' : 'Time Limit (Seconds)'}
                   </label>
                   <input
                     type="number"
@@ -1650,24 +2294,27 @@ export default function AdminDashboard({ locale = 'en' }: AdminDashboardProps) {
                   type="text"
                   value={questionForm.explanation_ar}
                   onChange={e => setQuestionForm({ ...questionForm, explanation_ar: e.target.value })}
-                  placeholder="مثال: لوفي هو صاحب فاكهة الإله الشمسي نيكا"
+                  placeholder="مثال: كلمات الأغنية الأسطورية من إبداع طارق العربي طرقان"
                   className="w-full p-2 rounded-xl bg-black/50 border border-pink-400/30 text-white"
                 />
               </div>
 
-              <div className="flex items-center justify-end gap-2 pt-4">
+              <div className="flex items-center justify-end gap-2 pt-4 border-t border-white/5">
                 <button
                   type="button"
-                  onClick={() => setShowQuestionModal(false)}
+                  onClick={() => {
+                    setShowQuestionModal(false)
+                    setEditingQuestionId(null)
+                  }}
                   className="px-4 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-pink-200 font-bold"
                 >
                   {isRtl ? 'إلغاء' : 'Cancel'}
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2.5 rounded-xl bg-pink-600 hover:bg-pink-500 text-white font-extrabold shadow-lg"
+                  className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-500 text-white font-extrabold shadow-lg"
                 >
-                  {isRtl ? 'حفظ السؤال في الكويز' : 'Save Question'}
+                  {isRtl ? 'حفظ السؤال في البنك' : 'Save Question'}
                 </button>
               </div>
             </form>
@@ -1675,7 +2322,6 @@ export default function AdminDashboard({ locale = 'en' }: AdminDashboardProps) {
         </div>
       )}
 
-      {/* ============================================================ */}
       {/* MODAL 5: ADD / EDIT ZOOM & GUESS QUESTION */}
       {/* ============================================================ */}
       {showZoomModal && (
@@ -1908,6 +2554,173 @@ export default function AdminDashboard({ locale = 'en' }: AdminDashboardProps) {
                   className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-500 text-white font-extrabold shadow-lg"
                 >
                   {isRtl ? 'حفظ الشخصية في البنك' : 'Save Character'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+      {/* ============================================================ */}
+      {/* MODAL 6: ADD / EDIT AUDIO & OST QUESTION */}
+      {/* ============================================================ */}
+      {showAudioModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md animate-fade-in overflow-y-auto">
+          <div className="w-full max-w-xl bg-[#20102c] border-2 border-pink-500/30 rounded-3xl p-6 sm:p-8 shadow-2xl relative my-8">
+            <h3 className="text-xl font-black text-white mb-2">
+              {editingAudioId
+                ? (isRtl ? 'تعديل مقطع الأوست والصوت 🎵' : 'Edit Audio Track 🎵')
+                : (isRtl ? 'إضافة مقطع صوتي جديد للعبة 🎵' : 'Add New Audio Track 🎵')}
+            </h3>
+            <p className="text-xs text-pink-200/70 mb-4">
+              {isRtl
+                ? 'أدخل رابط المقطع الصوتي والإجابة الصحيحة مع أسماء الأنمي المقبولة'
+                : 'Enter audio URL, anime answer, and accepted aliases'}
+            </p>
+
+            <form onSubmit={handleSaveAudioQuestion} className="space-y-4 text-xs sm:text-sm">
+              <div>
+                <label className="block text-pink-200 font-bold mb-1">
+                  {isRtl ? 'رابط المقطع الصوتي (Audio URL - mp3/ogg/wav)' : 'Audio URL (Direct mp3/ogg link)'}
+                </label>
+                <input
+                  type="url"
+                  value={audioForm.audio_url}
+                  onChange={e => setAudioForm({ ...audioForm, audio_url: e.target.value })}
+                  placeholder="https://.../track.mp3"
+                  className="w-full p-2.5 rounded-xl bg-black/50 border border-pink-400/30 text-white"
+                  required
+                />
+                {audioForm.audio_url && (
+                  <div className="mt-2 p-2 rounded-xl bg-black/40 border border-pink-500/20 flex flex-col gap-1">
+                    <span className="text-[10px] text-pink-300 font-bold">{isRtl ? 'معاينة تجريبية للصوت:' : 'Live Audio Test:'}</span>
+                    <audio controls src={audioForm.audio_url} className="w-full h-8" />
+                  </div>
+                )}
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-pink-200 font-bold mb-1">
+                    {isRtl ? 'اسم الأنمي بالعربية (الإجابة الصحيحة)' : 'Anime Answer (Arabic)'}
+                  </label>
+                  <input
+                    type="text"
+                    value={audioForm.answer_ar}
+                    onChange={e => setAudioForm({ ...audioForm, answer_ar: e.target.value })}
+                    placeholder="مثال: المحقق كونان"
+                    className="w-full p-2 rounded-xl bg-black/50 border border-pink-400/30 text-white"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-pink-200 font-bold mb-1">
+                    {isRtl ? 'اسم الأنمي بالإنجليزية' : 'Anime Answer (English)'}
+                  </label>
+                  <input
+                    type="text"
+                    value={audioForm.answer}
+                    onChange={e => setAudioForm({ ...audioForm, answer: e.target.value })}
+                    placeholder="e.g. Detective Conan"
+                    className="w-full p-2 rounded-xl bg-black/50 border border-pink-400/30 text-white"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-pink-200 font-bold mb-1">
+                  {isRtl ? 'الأسماء المقبولة والتهجئات البديلة (افصل بينها بفواصل)' : 'Accepted Aliases (Comma-separated)'}
+                </label>
+                <input
+                  type="text"
+                  value={audioForm.aliases}
+                  onChange={e => setAudioForm({ ...audioForm, aliases: e.target.value })}
+                  placeholder="مثال: كونان, Detective Conan, Meitantei Conan"
+                  className="w-full p-2 rounded-xl bg-black/50 border border-pink-400/30 text-white"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-pink-200 font-bold mb-1">
+                    {isRtl ? 'التصنيف / المنشأ بالعربية' : 'Category (Arabic)'}
+                  </label>
+                  <input
+                    type="text"
+                    value={audioForm.anime_origin_ar}
+                    onChange={e => setAudioForm({ ...audioForm, anime_origin_ar: e.target.value })}
+                    placeholder="مثال: أنمي غموض (سبيستون)"
+                    className="w-full p-2 rounded-xl bg-black/50 border border-pink-400/30 text-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-pink-200 font-bold mb-1">
+                    {isRtl ? 'التصنيف بالإنجليزية' : 'Category (English)'}
+                  </label>
+                  <input
+                    type="text"
+                    value={audioForm.anime_origin}
+                    onChange={e => setAudioForm({ ...audioForm, anime_origin: e.target.value })}
+                    placeholder="e.g. Mystery Anime"
+                    className="w-full p-2 rounded-xl bg-black/50 border border-pink-400/30 text-white"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-pink-200 font-bold mb-1">
+                  {isRtl ? 'التلميح بالعربية' : 'Clue / Hint (Arabic)'}
+                </label>
+                <input
+                  type="text"
+                  value={audioForm.hint_ar}
+                  onChange={e => setAudioForm({ ...audioForm, hint_ar: e.target.value })}
+                  placeholder="مثال: سينشي كودو والمتحرون الصغار"
+                  className="w-full p-2 rounded-xl bg-black/50 border border-pink-400/30 text-white"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-pink-200 font-bold mb-1">
+                    {isRtl ? 'النقاط القصوى' : 'Base Points'}
+                  </label>
+                  <input
+                    type="number"
+                    value={audioForm.base_points}
+                    onChange={e => setAudioForm({ ...audioForm, base_points: Number(e.target.value) })}
+                    className="w-full p-2 rounded-xl bg-black/50 border border-pink-400/30 text-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-pink-200 font-bold mb-1">
+                    {isRtl ? 'وقت التخمين (ثواني)' : 'Time Limit (Seconds)'}
+                  </label>
+                  <input
+                    type="number"
+                    value={audioForm.total_time_seconds}
+                    onChange={e => setAudioForm({ ...audioForm, total_time_seconds: Number(e.target.value) })}
+                    className="w-full p-2 rounded-xl bg-black/50 border border-pink-400/30 text-white"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-4 border-t border-white/5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowAudioModal(false)
+                    setEditingAudioId(null)
+                  }}
+                  className="px-4 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-pink-200 font-bold"
+                >
+                  {isRtl ? 'إلغاء' : 'Cancel'}
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-500 text-white font-extrabold shadow-lg"
+                >
+                  {isRtl ? 'حفظ المقطع الصوتي' : 'Save Audio Track'}
                 </button>
               </div>
             </form>

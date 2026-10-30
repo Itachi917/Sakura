@@ -17,7 +17,7 @@ import {
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { sound } from '@/lib/sound'
-import { getQuestionIndex, prepareDrawItRound } from '@/lib/gameHelpers'
+import { getQuestionIndex, prepareDrawItRound, getQuizQuestionsForActivity, getAudioQuestionsForSession } from '@/lib/gameHelpers'
 import { cn } from '@/lib/utils'
 import type { GameSession, SessionParticipant } from '@/types/database'
 import ProjectorLobby from './ProjectorLobby'
@@ -26,16 +26,19 @@ import ProjectorFeud from './ProjectorFeud'
 import ProjectorDraw from './ProjectorDraw'
 import ProjectorLeaderboard from './ProjectorLeaderboard'
 import ProjectorZoomGuess from './ProjectorZoomGuess'
+import ProjectorAudioGuess from './ProjectorAudioGuess'
 import {
   WHOS_THAT_CHARACTER_QUESTIONS,
   SPACETOON_NOSTALGIA_QUESTIONS,
   ANIME_EXPERT_EXAM_QUESTIONS,
   SAKURA_FEUD_ROUNDS,
   ZOOM_GUESS_QUESTIONS,
+  AUDIO_GUESS_QUESTIONS,
   DRAWING_WORDS,
   type QuizQuestionData,
   type FeudQuestionData,
   type ZoomGuessQuestionData,
+  type AudioGuessQuestionData,
 } from '@/lib/gameData'
 
 interface ProjectorContainerProps {
@@ -59,6 +62,7 @@ export default function ProjectorContainer({ sessionId, locale = 'en' }: Project
   // Game state
   const [quizQuestions, setQuizQuestions] = useState<QuizQuestionData[]>([])
   const [zoomQuestions, setZoomQuestions] = useState<ZoomGuessQuestionData[]>(ZOOM_GUESS_QUESTIONS)
+  const [audioQuestions, setAudioQuestions] = useState<AudioGuessQuestionData[]>(AUDIO_GUESS_QUESTIONS)
   const [feudRounds, setFeudRounds] = useState<FeudQuestionData[]>(SAKURA_FEUD_ROUNDS)
   const [feudRoundState, setFeudRoundState] = useState<{
     team1Score: number
@@ -112,10 +116,13 @@ export default function ProjectorContainer({ sessionId, locale = 'en' }: Project
   }
 
   const isZoom = session?.activity_type === 'zoom_guess' || (session?.settings as any)?.game_mode === 'zoom_guess'
+  const isAudio = session?.activity_type === 'audio_guess' || (session?.settings as any)?.game_mode === 'audio_guess'
   const isFeud = session?.activity_type === 'sakura_feud'
   const isDrawIt = session?.activity_type === 'draw_it_guess_it'
   const totalQuestions = isZoom
     ? zoomQuestions.length
+    : isAudio
+    ? audioQuestions.length
     : isFeud
     ? feudRounds.length
     : isDrawIt
@@ -243,12 +250,10 @@ export default function ProjectorContainer({ sessionId, locale = 'en' }: Project
               setZoomQuestions(ZOOM_GUESS_QUESTIONS)
             }
           }
-        } else if (sessData.activity_type === 'whos_that_character') {
-          setQuizQuestions(WHOS_THAT_CHARACTER_QUESTIONS)
-        } else if (sessData.activity_type === 'spacetoon_nostalgia') {
-          setQuizQuestions(SPACETOON_NOSTALGIA_QUESTIONS)
-        } else if (sessData.activity_type === 'anime_expert_exam') {
-          setQuizQuestions(ANIME_EXPERT_EXAM_QUESTIONS)
+        } else if (sessData.activity_type === 'audio_guess' || (sessData.settings as any)?.game_mode === 'audio_guess') {
+          setAudioQuestions(getAudioQuestionsForSession(sessData.settings as any))
+        } else if (['whos_that_character', 'spacetoon_nostalgia', 'anime_expert_exam'].includes(sessData.activity_type)) {
+          setQuizQuestions(getQuizQuestionsForActivity(sessData.activity_type, sessData.settings as any))
         }
 
         // Fetch participants
@@ -595,6 +600,23 @@ export default function ProjectorContainer({ sessionId, locale = 'en' }: Project
             <ProjectorDraw
               session={session}
               participants={participants}
+              locale={locale}
+            />
+          )}
+
+        {/* AUDIO GUESS STAGE */}
+        {(session.activity_type === 'audio_guess' ||
+          (session.settings as any)?.game_mode === 'audio_guess') &&
+          ['question_active', 'answer_collection_ended', 'answer_reveal', 'round_results'].includes(
+            session.status
+          ) &&
+          audioQuestions[currentIdx] && (
+            <ProjectorAudioGuess
+              session={session}
+              participants={participants}
+              currentQuestion={audioQuestions[currentIdx]}
+              questionIndex={currentIdx}
+              totalQuestions={totalQuestions}
               locale={locale}
             />
           )}

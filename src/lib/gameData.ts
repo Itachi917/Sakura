@@ -47,6 +47,29 @@ export interface DrawingWordData {
   aliases?: string[]
 }
 
+export interface AudioGuessQuestionData {
+  id: string
+  title: string
+  title_ar: string
+  audio_url: string
+  answer: string
+  answer_ar: string
+  aliases: string[]
+  anime_origin: string
+  anime_origin_ar: string
+  hint: string
+  hint_ar: string
+  image_url?: string
+  total_time_seconds: number
+  base_points: number
+  options?: {
+    id: string
+    text: string
+    text_ar: string
+    is_correct: boolean
+  }[]
+}
+
 // ------------------------------------------------------------
 // 1. "WHO'S THAT CHARACTER?"
 // ------------------------------------------------------------
@@ -715,5 +738,143 @@ export const ZOOM_GUESS_QUESTIONS: ZoomGuessQuestionData[] = [
     focus_point: '50% 40%',
     total_time_seconds: 40,
     base_points: 1000,
+  },
+]
+
+// ------------------------------------------------------------
+// 8. "AUDIO GUESS (خمّن الأوست / شارة الأنمي)"
+// ------------------------------------------------------------
+export const AUDIO_GUESS_QUESTIONS: AudioGuessQuestionData[] = [
+  {
+    id: 'ag-1',
+    title: 'Guess the iconic anime from this detective theme song!',
+    title_ar: 'خمّن الأنمي الشهير من لحن الشارة الأيقونية والتحقيق!',
+    audio_url: 'https://upload.wikimedia.org/wikipedia/commons/4/4b/Japanese_classical_music_flute.ogg',
+    answer: 'Detective Conan',
+    answer_ar: 'المحقق كونان',
+    aliases: ['المحقق كونان', 'كونان', 'Detective Conan', 'Conan', 'Meitantei Conan'],
+    anime_origin: 'Detective Conan (Case Closed)',
+    anime_origin_ar: 'المحقق كونان (سبيستون)',
+    hint: 'A brilliant teenage detective turned into a child by a mysterious syndicate.',
+    hint_ar: 'سينشي كودو الذي تقلص جسده ليصبح طفلاً ذكياً يحل أصعب الجرائم!',
+    image_url: 'https://images.unsplash.com/photo-1578632767115-351597cf2477?w=800&auto=format&fit=crop',
+    total_time_seconds: 30,
+    base_points: 1000,
+    options: [
+      { id: 'ag-1-a', text: 'Detective Conan', text_ar: 'المحقق كونان', is_correct: true },
+      { id: 'ag-1-b', text: 'Death Note', text_ar: 'مذكرة الموت', is_correct: false },
+      { id: 'ag-1-c', text: 'Kindaichi Case Files', text_ar: 'ملفات كيندايتشي', is_correct: false },
+      { id: 'ag-1-d', text: 'Lupin III', text_ar: 'لوبين الثالث', is_correct: false },
+    ],
+  },
+  {
+    id: 'ag-2',
+    title: 'Which anime does this legendary choral battle theme belong to?',
+    title_ar: 'من أي أنمي هذه الملحمة الموسيقية والقتال العظيم ضد العمالقة؟',
+    audio_url: 'https://upload.wikimedia.org/wikipedia/commons/4/4b/Japanese_classical_music_flute.ogg',
+    answer: 'Attack on Titan',
+    answer_ar: 'هجوم العمالقة',
+    aliases: ['هجوم العمالقة', 'اتاتك اون تايتن', 'Attack on Titan', 'Shingeki no Kyojin', 'AOT'],
+    anime_origin: 'Attack on Titan (Shingeki no Kyojin)',
+    anime_origin_ar: 'هجوم العمالقة (شينغيكي نو كيوجين)',
+    hint: 'Humanity lives behind giant walls defending against man-eating giants.',
+    hint_ar: 'إيرين ييغر وفيلق الاستكشاف وشعار أجنحة الحرية خلف الأسوار الثلاثة!',
+    image_url: 'https://images.unsplash.com/photo-1534447677768-be436bb09401?w=800&auto=format&fit=crop',
+    total_time_seconds: 30,
+    base_points: 1000,
+    options: [
+      { id: 'ag-2-a', text: 'Attack on Titan', text_ar: 'هجوم العمالقة', is_correct: true },
+      { id: 'ag-2-b', text: 'Fullmetal Alchemist', text_ar: 'الخيميائي الفولاذي', is_correct: false },
+      { id: 'ag-2-c', text: 'Tokyo Ghoul', text_ar: 'طوكيو غول', is_correct: false },
+      { id: 'ag-2-d', text: 'Demon Slayer', text_ar: 'قاتل الشياطين', is_correct: false },
+    ],
+  },
+  {
+    id: 'ag-3',
+    title: 'Recognize this iconic Spacetoon opening song melody?',
+    title_ar: 'من أي أنمي هذه الشارة الكلاسيكية من زمن سبيستون الجميل؟',
+    audio_url: 'https://upload.wikimedia.org/wikipedia/commons/4/4b/Japanese_classical_music_flute.ogg',
+    answer: 'Hunter x Hunter',
+    answer_ar: 'القناص',
+    aliases: ['القناص', 'هنتر', 'Hunter x Hunter', 'HXH', 'هنتر اكس هنتر'],
+    anime_origin: 'Hunter x Hunter (1999 / 2011)',
+    anime_origin_ar: 'القناص (سبيستون)',
+    hint: 'Gon Freecss embarks on a journey to find his father and become a licensed Hunter.',
+    hint_ar: 'قد لمعت عيناه، بالعزم انتفضت يمناك.. في هدوء الليل من هو الصامد المحارب؟',
+    image_url: 'https://images.unsplash.com/photo-1563089145-599997674d42?w=800&auto=format&fit=crop',
+    total_time_seconds: 30,
+    base_points: 1000,
+    options: [
+      { id: 'ag-3-a', text: 'Hunter x Hunter', text_ar: 'القناص', is_correct: true },
+      { id: 'ag-3-b', text: 'Yu Yu Hakusho', text_ar: 'يو يو هاكوشو', is_correct: false },
+      { id: 'ag-3-c', text: 'Bleach', text_ar: 'بليتش', is_correct: false },
+      { id: 'ag-3-d', text: 'Naruto', text_ar: 'ناروتو', is_correct: false },
+    ],
+  },
+  {
+    id: 'ag-4',
+    title: 'Identify this iconic pirate adventure opening OST!',
+    title_ar: 'خمّن أنمي رحلة البحث عن الكنز الأعظم في أعالي البحار!',
+    audio_url: 'https://upload.wikimedia.org/wikipedia/commons/4/4b/Japanese_classical_music_flute.ogg',
+    answer: 'One Piece',
+    answer_ar: 'ون بيس',
+    aliases: ['ون بيس', 'ونبيس', 'One Piece', 'لوفي', 'Luffy'],
+    anime_origin: 'One Piece',
+    anime_origin_ar: 'ون بيس',
+    hint: 'Monkey D. Luffy and the Straw Hat Pirates sail the Grand Line for the legendary treasure.',
+    hint_ar: 'قبعة القش والبحث عن كنز غول دي روجر الأسطوري في الغراند لاين!',
+    image_url: 'https://images.unsplash.com/photo-1579783902614-a3fb3927b675?w=800&auto=format&fit=crop',
+    total_time_seconds: 30,
+    base_points: 1000,
+    options: [
+      { id: 'ag-4-a', text: 'One Piece', text_ar: 'ون بيس', is_correct: true },
+      { id: 'ag-4-b', text: 'Fairy Tail', text_ar: 'فيري تيل', is_correct: false },
+      { id: 'ag-4-c', text: 'Black Clover', text_ar: 'بلاك كلوفر', is_correct: false },
+      { id: 'ag-4-d', text: 'Toriko', text_ar: 'توريكو', is_correct: false },
+    ],
+  },
+  {
+    id: 'ag-5',
+    title: 'Which anime features this iconic ninja flute & battle theme?',
+    title_ar: 'من أي أنمي هذا اللحن الملحمي الممزوج بناي النينجا التقليدي؟',
+    audio_url: 'https://upload.wikimedia.org/wikipedia/commons/4/4b/Japanese_classical_music_flute.ogg',
+    answer: 'Naruto',
+    answer_ar: 'ناروتو',
+    aliases: ['ناروتو', 'ناروتو شيبودن', 'Naruto', 'Naruto Shippuden', 'شيبودن'],
+    anime_origin: 'Naruto & Naruto Shippuden',
+    anime_origin_ar: 'ناروتو شيبودن',
+    hint: 'A spirited ninja carrying the Nine-Tailed Fox dreams of becoming Hokage.',
+    hint_ar: 'نينجا قرية كونوها صاحب الجينشوريكي وحلم الهوكاجي!',
+    image_url: 'https://images.unsplash.com/photo-1578632767115-351597cf2477?w=800&auto=format&fit=crop',
+    total_time_seconds: 30,
+    base_points: 1000,
+    options: [
+      { id: 'ag-5-a', text: 'Naruto', text_ar: 'ناروتو', is_correct: true },
+      { id: 'ag-5-b', text: 'Bleach', text_ar: 'بليتش', is_correct: false },
+      { id: 'ag-5-c', text: 'Jujutsu Kaisen', text_ar: 'جوجوتسو كايسن', is_correct: false },
+      { id: 'ag-5-d', text: 'Samurai Champloo', text_ar: 'ساموراي تشامبلو', is_correct: false },
+    ],
+  },
+  {
+    id: 'ag-6',
+    title: 'Recognize this legendary mecha anime Arabic intro song?',
+    title_ar: 'خمّن أنمي الروبوتات الخارق الأسطوري: عليّ عليّ بطل فليد!',
+    audio_url: 'https://upload.wikimedia.org/wikipedia/commons/4/4b/Japanese_classical_music_flute.ogg',
+    answer: 'Grendizer',
+    answer_ar: 'مغامرات الفضاء غرندايزر',
+    aliases: ['غرندايزر', 'غريندايزر', 'جريندايزر', 'Grendizer', 'Goldorak', 'UFO Robot Grendizer'],
+    anime_origin: 'UFO Robot Grendizer',
+    anime_origin_ar: 'مغامرات الفضاء (غرندايزر)',
+    hint: 'Duke Fleed defends Earth from King Vega aboard the mighty giant robot.',
+    hint_ar: 'دوق فليد وصحن دوار ورعد الفضاء وسلاح الساحق الخارق!',
+    image_url: 'https://images.unsplash.com/photo-1607604276583-eef5d076aa5f?w=800&auto=format&fit=crop',
+    total_time_seconds: 30,
+    base_points: 1000,
+    options: [
+      { id: 'ag-6-a', text: 'Grendizer', text_ar: 'مغامرات الفضاء غرندايزر', is_correct: true },
+      { id: 'ag-6-b', text: 'Mazinger Z', text_ar: 'مازنجر زد', is_correct: false },
+      { id: 'ag-6-c', text: 'Gundam', text_ar: 'غاندام', is_correct: false },
+      { id: 'ag-6-d', text: 'Voltron', text_ar: 'فولترون', is_correct: false },
+    ],
   },
 ]
