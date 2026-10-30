@@ -276,8 +276,26 @@ export default function HostControlRoom({ sessionId, locale = 'en' }: HostContro
       })
       .subscribe()
 
+    const garticChannel = supabase
+      .channel(`gartic_phone_${sessionId}`)
+      .on('broadcast', { event: 'phase_submission' }, payload => {
+        const { participantId, content, phase, nickname } = payload.payload
+        setSession(prev => {
+          if (!prev) return prev
+          const curSettings = (prev.settings as Record<string, unknown>) || {}
+          const curSubs = { ...((curSettings.submissions as Record<string, unknown>) || {}) }
+          curSubs[participantId] = { content, phase, nickname }
+          return {
+            ...prev,
+            settings: { ...curSettings, submissions: curSubs } as any,
+          }
+        })
+      })
+      .subscribe()
+
     return () => {
       supabase.removeChannel(channel)
+      supabase.removeChannel(garticChannel)
     }
   }, [sessionId, selectedRep1Id, selectedRep2Id, participants])
 
@@ -507,7 +525,12 @@ export default function HostControlRoom({ sessionId, locale = 'en' }: HostContro
     setActionLoading(true)
     sound.playClick()
     try {
-      const currentSettings = (session.settings as Record<string, unknown>) || {}
+      const { data: latestSess } = await supabase
+        .from('game_sessions')
+        .select('*')
+        .eq('id', session.id)
+        .single()
+      const currentSettings = (latestSess?.settings as Record<string, unknown>) || (session.settings as Record<string, unknown>) || {}
       const phase = (currentSettings.phone_phase as string) || 'prompt'
       if (phase === 'album') {
         const chains = (currentSettings.chains as Record<string, unknown>) || {}

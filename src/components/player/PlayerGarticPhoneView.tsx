@@ -151,17 +151,21 @@ export default function PlayerGarticPhoneView({
   const chains = (settings.chains as Record<string, GarticPhoneChain>) || {}
   const albumIdx = typeof settings.current_album_index === 'number' ? settings.current_album_index : 0
 
-  // Participant list fallback
+  // Canonical participant order
   const participants = useMemo(() => {
-    return Object.values(chains).map((c) => ({
-      id: c.ownerId,
-      nickname: c.ownerNickname,
+    let order = (settings.participant_order as string[]) || []
+    if (!order || order.length === 0) {
+      order = Object.keys(chains)
+    }
+    return order.map((pId) => ({
+      id: pId,
+      nickname: chains[pId]?.ownerNickname || 'Player',
       session_id: session.id,
       joined_at: new Date().toISOString(),
       score: 0,
       is_host: false,
     })) as unknown as SessionParticipant[]
-  }, [chains, session.id])
+  }, [settings.participant_order, chains, session.id])
 
   // Assigned task for this player
   const task = useMemo(() => {
@@ -341,20 +345,72 @@ export default function PlayerGarticPhoneView({
 
     let contentToSubmit = textInput.trim()
 
-    if (phase === 'prompt' && !contentToSubmit) {
-      const fallback = GARTIC_PHONE_PROMPTS[Math.floor(Math.random() * GARTIC_PHONE_PROMPTS.length)]
-      contentToSubmit = isRtl ? fallback.prompt_ar : fallback.prompt
+    if (phase === 'prompt') {
+      // Use strictly what the player typed; only if totally empty, use generic prompt
+      if (!contentToSubmit) {
+        contentToSubmit = isRtl ? 'شخصية أنمي في موقف كوميدي مضحك' : 'An anime character in a funny situation'
+      }
     } else if (phase === 'drawing') {
       if (canvasRef.current) {
-        contentToSubmit = canvasRef.current.toDataURL('image/png', 0.8)
+        try {
+          contentToSubmit = canvasRef.current.toDataURL('image/webp', 0.7)
+          if (!contentToSubmit || contentToSubmit.length < 50) {
+            contentToSubmit = canvasRef.current.toDataURL('image/png', 0.7)
+          }
+        } catch {
+          contentToSubmit = canvasRef.current.toDataURL('image/png')
+        }
       } else {
         contentToSubmit = ''
       }
-    } else if (phase === 'description' && !contentToSubmit) {
-      contentToSubmit = isRtl ? 'رسمة غامضة ومضحكة!' : 'A funny mystery drawing!'
+    } else if (phase === 'description') {
+      if (!contentToSubmit) {
+        contentToSubmit = isRtl ? 'رسمة غامضة ومضحكة' : 'A funny mystery drawing'
+      }
     }
 
-    // Broadcast submission to host & room
+    // 1. Submit to Next.js server route (atomic JSONB update)
+    try {
+      await fetch('/api/game/gartic-phone/submit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionId: session.id,
+          participantId: participant.id,
+          phase,
+          content: contentToSubmit,
+          nickname: participant.nickname,
+        }),
+      })
+    } catch (e) {
+      console.warn('API submission failed, falling back to direct update:', e)
+      // Fallback: direct Supabase update
+      try {
+        const { data: latestSess } = await supabase
+          .from('game_sessions')
+          .select('settings')
+          .eq('id', session.id)
+          .single()
+        const currentSettings = (latestSess?.settings as Record<string, unknown>) || session.settings || {}
+        const currentSubmissions = { ...((currentSettings.submissions as Record<string, unknown>) || {}) }
+        currentSubmissions[participant.id] = {
+          phase,
+          content: contentToSubmit,
+          nickname: participant.nickname,
+          submittedAt: Date.now(),
+        }
+        await supabase
+          .from('game_sessions')
+          .update({
+            settings: { ...currentSettings, submissions: currentSubmissions } as any,
+          })
+          .eq('id', session.id)
+      } catch (err2) {
+        console.error('Fallback direct update error:', err2)
+      }
+    }
+
+    // 2. Broadcast submission over Realtime Channel for instant UI feedback
     try {
       await supabase.channel(`gartic_phone_${session.id}`).send({
         type: 'broadcast',
@@ -388,9 +444,16 @@ export default function PlayerGarticPhoneView({
 
   // Current active album chain for review
   const activeChain = useMemo(() => {
+    const order = (settings.participant_order as string[]) || []
+    if (order.length > 0) {
+      const activeOwnerId = order[albumIdx % order.length]
+      if (activeOwnerId && chains[activeOwnerId]) {
+        return chains[activeOwnerId]
+      }
+    }
     const chainList = Object.values(chains)
     return chainList[albumIdx % (chainList.length || 1)] || null
-  }, [chains, albumIdx])
+  }, [chains, albumIdx, settings.participant_order])
 
   return (
     <div className="w-full max-w-lg mx-auto flex flex-col justify-between h-full py-2 animate-fade-in pb-12 select-none">
@@ -519,13 +582,14 @@ export default function PlayerGarticPhoneView({
       {/* ── PHASE 2: DRAW THE PROMPT ── */}
       {phase === 'drawing' && (
         <div className="flex-1 flex flex-col justify-between gap-2.5">
-          {/* Target prompt prompt banner */}
+          {/* Target prompt banner */}
           <div className="p-3 rounded-2xl bg-gradient-to-r from-purple-500/25 via-pink-500/20 to-purple-500/25 border-2 border-pink-400/40 text-center shadow-lg">
-            <span className="text-[10px] uppercase tracking-wider text-pink-300 font-bold block mb-0.5">
-              {isRtl ? 'ارسم ما تقرأه الآن 🎨:' : 'Draw what you read 🎨:'}
-            </span>
+            <div className="flex items-center justify-between text-[10px] text-pink-300 font-bold mb-1">
+              <span>{isRtl ? 'المطلوب رسمه 🎨:' : 'Draw what you read 🎨:'}</span>
+              <span className="text-purple-200">✍️ {task.authorNickname || task.targetOwnerNickname || 'زميلك'}</span>
+            </div>
             <p className="font-black text-base lg:text-lg text-white leading-snug">
-              &ldquo;{task.targetPrompt || (isRtl ? 'ارسم شخصية أنمي تحبها!' : 'Draw your favorite anime character!')}&rdquo;
+              &ldquo;{task.targetPrompt || (isRtl ? 'ارسم فكرة مضحكة!' : 'Draw something funny!')}&rdquo;
             </p>
           </div>
 
@@ -696,6 +760,10 @@ export default function PlayerGarticPhoneView({
             </div>
 
             {/* Display Assigned Drawing */}
+            <div className="flex items-center justify-between text-xs font-mono font-bold text-pink-300 mb-1.5 px-1">
+              <span>{isRtl ? 'رسمة زميلك المطلوب تخمينها:' : 'Peer drawing to describe:'}</span>
+              <span className="text-pink-200">🎨 {task.authorNickname || 'الرسام'}</span>
+            </div>
             <div className="w-full aspect-[4/3] rounded-2xl overflow-hidden border-2 border-pink-500/40 bg-[#1c1026] shadow-xl mb-3 flex items-center justify-center">
               {task.targetDrawing ? (
                 // eslint-disable-next-line @next/next/no-img-element

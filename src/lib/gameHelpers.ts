@@ -378,12 +378,32 @@ export function prepareGameSwitchSettings(
 /**
  * Initializes a Gartic Phone game session state
  */
+/**
+ * Helper to safely extract string content from submission object or primitive
+ */
+function extractGarticSubmissionContent(submission: unknown): string {
+  if (!submission) return ''
+  if (typeof submission === 'string') return submission.trim()
+  if (typeof submission === 'object' && submission !== null) {
+    const obj = submission as Record<string, unknown>
+    if (typeof obj.content === 'string') return obj.content.trim()
+  }
+  return ''
+}
+
+/**
+ * Initializes a Gartic Phone game session state with a canonical participant ring
+ */
 export function initGarticPhoneSettings(participants: SessionParticipant[]): Record<string, unknown> {
   const now = Date.now()
   const roundDuration = 45 // 45s for writing prompt
   const chains: Record<string, GarticPhoneChain> = {}
 
-  participants.forEach((p) => {
+  // Deterministically sort participants by ID so the ring order is identical across all screens
+  const sorted = [...participants].sort((a, b) => a.id.localeCompare(b.id))
+  const participantOrder = sorted.map((p) => p.id)
+
+  sorted.forEach((p) => {
     chains[p.id] = {
       id: `chain-${p.id}`,
       ownerId: p.id,
@@ -399,14 +419,17 @@ export function initGarticPhoneSettings(participants: SessionParticipant[]): Rec
     round_start_time: now,
     round_deadline: new Date(now + roundDuration * 1000).toISOString(),
     chains,
+    participant_order: participantOrder,
     submissions: {},
     current_album_index: 0,
   }
 }
 
 /**
- * Advances the Gartic Phone game to the next phase:
- * prompt -> drawing -> description -> album showcase
+ * Advances the Gartic Phone game to the next phase according to the telephone rules:
+ * - prompt -> drawing (player i draws prompt of player (i-1))
+ * - drawing -> description (player i describes drawing of player (i-1))
+ * - description -> album showcase (reveals full chain step-by-step)
  */
 export function advanceGarticPhonePhase(
   currentSettings: Record<string, unknown>,
@@ -414,34 +437,49 @@ export function advanceGarticPhonePhase(
 ): Record<string, unknown> {
   const phase = (currentSettings.phone_phase as string) || 'prompt'
   const chains = { ...((currentSettings.chains as Record<string, GarticPhoneChain>) || {}) }
-  const submissions = (currentSettings.submissions as Record<string, string>) || {}
+  const rawSubmissions = (currentSettings.submissions as Record<string, unknown>) || {}
   const now = Date.now()
-  const N = Math.max(1, participants.length)
+
+  // Map participants by ID for instant nickname lookups
+  const participantMap: Record<string, SessionParticipant> = {}
+  participants.forEach((p) => {
+    participantMap[p.id] = p
+  })
+
+  // Get canonical participant order from settings, or fallback to sorted participant IDs
+  let order = (currentSettings.participant_order as string[]) || []
+  if (!order || order.length === 0) {
+    order = [...participants].sort((a, b) => a.id.localeCompare(b.id)).map((p) => p.id)
+  }
 
   // Ensure every participant has a chain entry
-  participants.forEach((p) => {
-    if (!chains[p.id]) {
-      chains[p.id] = {
-        id: `chain-${p.id}`,
-        ownerId: p.id,
-        ownerNickname: p.nickname,
+  order.forEach((pId) => {
+    if (!chains[pId]) {
+      const p = participantMap[pId]
+      chains[pId] = {
+        id: `chain-${pId}`,
+        ownerId: pId,
+        ownerNickname: p?.nickname || 'Player',
         turns: [],
       }
     }
   })
 
+  const N = Math.max(1, order.length)
+
   if (phase === 'prompt') {
-    // Collect prompt submissions into each chain
-    participants.forEach((p, idx) => {
-      const fallbackPrompt =
-        GARTIC_PHONE_PROMPTS[idx % GARTIC_PHONE_PROMPTS.length]?.prompt_ar ||
-        'لوفي يأكل رامن مع ناروتو في مسقط'
-      const promptText = submissions[p.id] || fallbackPrompt
-      const chain = chains[p.id]
+    // 1. Collect prompt submissions into each player's own chain
+    order.forEach((pId) => {
+      const p = participantMap[pId] || { id: pId, nickname: chains[pId]?.ownerNickname || 'Player' }
+      const submittedPrompt = extractGarticSubmissionContent(rawSubmissions[pId])
+
+      // Strictly use what the player typed. If totally empty, use generic anime prompt.
+      const promptText = submittedPrompt || 'شخصية أنمي في موقف كوميدي مضحك'
+      const chain = chains[pId]
       if (chain) {
         chain.turns = [
           {
-            participantId: p.id,
+            participantId: pId,
             nickname: p.nickname,
             type: 'prompt',
             content: promptText,
@@ -459,24 +497,27 @@ export function advanceGarticPhonePhase(
       round_start_time: now,
       round_deadline: new Date(now + drawDuration * 1000).toISOString(),
       chains,
+      participant_order: order,
       submissions: {},
     }
   } else if (phase === 'drawing') {
-    // Collect drawing submissions into each chain
-    participants.forEach((p, idx) => {
-      // Participant p drew for owner of chain (idx - 1 + N) % N
-      const targetOwner = participants[(idx - 1 + N) % N]
-      const chain = targetOwner ? chains[targetOwner.id] : null
-      const drawingData = submissions[p.id] || ''
+    // 2. Collect drawing submissions:
+    // In round 2, player at index i drew the prompt of book owned by (i - 1 + N) % N
+    order.forEach((pId, idx) => {
+      const p = participantMap[pId] || { id: pId, nickname: `Player ${idx + 1}` }
+      const targetOwnerId = order[(idx - 1 + N) % N]
+      const chain = targetOwnerId ? chains[targetOwnerId] : null
+      const drawingData = extractGarticSubmissionContent(rawSubmissions[pId])
 
       if (chain) {
-        chain.turns.push({
-          participantId: p.id,
+        // Turn 1 is the drawing
+        chain.turns[1] = {
+          participantId: pId,
           nickname: p.nickname,
           type: 'drawing',
-          content: drawingData,
+          content: drawingData, // exact drawing made by player pId!
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        })
+        }
       }
     })
 
@@ -488,25 +529,27 @@ export function advanceGarticPhonePhase(
       round_start_time: now,
       round_deadline: new Date(now + descDuration * 1000).toISOString(),
       chains,
+      participant_order: order,
       submissions: {},
     }
   } else if (phase === 'description') {
-    // Collect description submissions into each chain
-    participants.forEach((p, idx) => {
-      const targetOwner = participants[(idx - (N > 2 ? 2 : 1) + N) % N]
-      const chain = targetOwner ? chains[targetOwner.id] : null
-      const descText =
-        submissions[p.id] ||
-        (targetOwner?.nickname ? `رسمة جميلة بواسطة ${targetOwner.nickname}` : 'رسمة أنمي غامضة')
+    // 3. Collect description submissions:
+    // In round 3, player at index i described the drawing on book owned by (i - 2 + N) % N
+    order.forEach((pId, idx) => {
+      const p = participantMap[pId] || { id: pId, nickname: `Player ${idx + 1}` }
+      const targetOwnerId = order[(idx - 2 + N) % N]
+      const chain = targetOwnerId ? chains[targetOwnerId] : null
+      const descText = extractGarticSubmissionContent(rawSubmissions[pId]) || 'رسمة غامضة ومضحكة'
 
       if (chain) {
-        chain.turns.push({
-          participantId: p.id,
+        // Turn 2 is the description/guess
+        chain.turns[2] = {
+          participantId: pId,
           nickname: p.nickname,
           type: 'description',
-          content: descText,
+          content: descText, // exact guess typed by player pId!
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        })
+        }
       }
     })
 
@@ -514,6 +557,7 @@ export function advanceGarticPhonePhase(
       ...currentSettings,
       phone_phase: 'album',
       chains,
+      participant_order: order,
       submissions: {},
       current_album_index: 0,
       round_deadline: undefined,
@@ -524,7 +568,9 @@ export function advanceGarticPhonePhase(
 }
 
 /**
- * Determines what task a player needs to do in the current Gartic Phone phase
+ * Determines what task a player needs to do in the current Gartic Phone phase:
+ * - drawing: player i sees the prompt typed by player (i - 1 + N) % N
+ * - description: player i sees the drawing made by player (i - 1 + N) % N for book (i - 2 + N) % N
  */
 export function getAssignedGarticTask(
   participantId: string,
@@ -535,31 +581,47 @@ export function getAssignedGarticTask(
   targetPrompt?: string
   targetDrawing?: string
   targetOwnerNickname?: string
+  authorNickname?: string
 } {
   const phase = (settings.phone_phase as 'prompt' | 'drawing' | 'description' | 'album') || 'prompt'
   const chains = (settings.chains as Record<string, GarticPhoneChain>) || {}
-  const N = Math.max(1, participants.length)
-  const myIndex = participants.findIndex((p) => p.id === participantId)
+
+  let order = (settings.participant_order as string[]) || []
+  if (!order || order.length === 0) {
+    const chainKeys = Object.keys(chains)
+    order = chainKeys.length > 0 ? chainKeys : [...participants].sort((a, b) => a.id.localeCompare(b.id)).map((p) => p.id)
+  }
+
+  const N = Math.max(1, order.length)
+  const myIndex = order.indexOf(participantId)
+
+  if (myIndex === -1) {
+    return { phase }
+  }
 
   if (phase === 'drawing') {
-    const targetOwner = participants[(myIndex - 1 + N) % N]
-    const chain = targetOwner ? chains[targetOwner.id] : null
-    const firstTurn = chain?.turns?.find((t) => t.type === 'prompt')
+    // Player i draws the prompt from player (i - 1 + N) % N
+    const targetOwnerId = order[(myIndex - 1 + N) % N]
+    const chain = targetOwnerId ? chains[targetOwnerId] : null
+    const firstTurn = chain?.turns?.[0]
     return {
       phase: 'drawing',
-      targetPrompt: firstTurn?.content || 'ارسم شخصية أنمي في موقف مضحك!',
-      targetOwnerNickname: targetOwner?.nickname || 'زميلك',
+      targetPrompt: firstTurn?.content || 'ارسم الفكرة!',
+      targetOwnerNickname: chain?.ownerNickname || 'زميلك',
+      authorNickname: firstTurn?.nickname || chain?.ownerNickname || 'زميلك',
     }
   }
 
   if (phase === 'description') {
-    const targetOwner = participants[(myIndex - (N > 2 ? 2 : 1) + N) % N]
-    const chain = targetOwner ? chains[targetOwner.id] : null
-    const drawTurn = chain?.turns?.slice().reverse().find((t) => t.type === 'drawing')
+    // Player i describes the drawing on book (i - 2 + N) % N
+    const targetOwnerId = order[(myIndex - 2 + N) % N]
+    const chain = targetOwnerId ? chains[targetOwnerId] : null
+    const drawTurn = chain?.turns?.[1] || chain?.turns?.find((t) => t.type === 'drawing')
     return {
       phase: 'description',
       targetDrawing: drawTurn?.content || '',
-      targetOwnerNickname: targetOwner?.nickname || 'زميلك',
+      targetOwnerNickname: chain?.ownerNickname || 'زميلك',
+      authorNickname: drawTurn?.nickname || 'الرسام',
     }
   }
 

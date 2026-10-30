@@ -870,7 +870,12 @@ export default function ProjectorContainer({ sessionId, locale = 'en' }: Project
                     setActionLoading(true)
                     sound.playClick()
                     try {
-                      const currentSettings = (session.settings as Record<string, unknown>) || {}
+                      const { data: latestSess } = await supabase
+                        .from('game_sessions')
+                        .select('*')
+                        .eq('id', session.id)
+                        .single()
+                      const currentSettings = (latestSess?.settings as Record<string, unknown>) || (session.settings as Record<string, unknown>) || {}
                       const phase = (currentSettings.phone_phase as string) || 'prompt'
                       if (phase === 'album') {
                         const chains = (currentSettings.chains as Record<string, unknown>) || {}

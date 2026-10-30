@@ -78,8 +78,13 @@ export default function ProjectorGarticPhone({
 
   // Chain list for album presentation
   const chainList = useMemo(() => {
+    const order = (settings.participant_order as string[]) || []
+    if (order.length > 0) {
+      const ordered = order.map((pId) => chains[pId]).filter(Boolean)
+      if (ordered.length > 0) return ordered
+    }
     return Object.values(chains)
-  }, [chains])
+  }, [chains, settings.participant_order])
 
   const currentChain = useMemo(() => {
     if (chainList.length === 0) return null
@@ -116,23 +121,39 @@ export default function ProjectorGarticPhone({
 
   // Auto-advance phase when time expires or all players submit
   const handleAutoAdvancePhase = async () => {
-    const updatedSettings = advanceGarticPhonePhase(
-      {
-        ...settings,
-        submissions,
-      },
-      participants
-    )
+    try {
+      const { data: latestSess } = await supabase
+        .from('game_sessions')
+        .select('settings')
+        .eq('id', session.id)
+        .single()
 
-    sound.playFanfare()
-    await supabase
-      .from('game_sessions')
-      .update({
-        settings: updatedSettings as unknown as import('@/types/database').Json,
-      })
-      .eq('id', session.id)
+      const currentSettings = (latestSess?.settings as Record<string, unknown>) || settings
+      const mergedSubmissions = {
+        ...((currentSettings.submissions as Record<string, unknown>) || {}),
+        ...submissions,
+      }
 
-    setSubmissions({})
+      const updatedSettings = advanceGarticPhonePhase(
+        {
+          ...currentSettings,
+          submissions: mergedSubmissions,
+        },
+        participants
+      )
+
+      sound.playFanfare()
+      await supabase
+        .from('game_sessions')
+        .update({
+          settings: updatedSettings as unknown as import('@/types/database').Json,
+        })
+        .eq('id', session.id)
+
+      setSubmissions({})
+    } catch (err) {
+      console.error('Error auto advancing phase:', err)
+    }
   }
 
   // Realtime listener for submissions & reactions
