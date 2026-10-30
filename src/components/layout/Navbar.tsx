@@ -43,13 +43,24 @@ const DICT: Record<string, Record<string, string>> = {
 }
 
 export default function Navbar({ locale = 'en', onLocaleChange }: NavProps) {
-  const t = (key: string): string => DICT[locale]?.[key] || DICT['en']?.[key] || key
+  const [currentLocale, setCurrentLocale] = useState(locale)
+  const t = (key: string): string => DICT[currentLocale]?.[key] || DICT['en']?.[key] || key
   const [user, setUser] = useState<User | null>(null)
   const [profile, setProfile] = useState<Profile | null>(null)
   const [role, setRole] = useState<UserRole | null>(null)
   const [mobileOpen, setMobileOpen] = useState(false)
   const [scrolled, setScrolled] = useState(false)
   const supabase = createClient()
+
+  useEffect(() => {
+    // Read actual cookie on client
+    const match = document.cookie.match(/(?:^|;\s*)locale=([^;]+)/)
+    const docLang = typeof document !== 'undefined' ? document.documentElement.lang : null
+    const active = match ? match[1] : (docLang || locale || 'en')
+    if (active === 'ar' || active === 'en') {
+      setCurrentLocale(active)
+    }
+  }, [locale])
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 20)
@@ -86,8 +97,16 @@ export default function Navbar({ locale = 'en', onLocaleChange }: NavProps) {
   }
 
   const toggleLocale = () => {
-    const newLocale = locale === 'en' ? 'ar' : 'en'
-    document.cookie = `locale=${newLocale}; path=/; max-age=31536000`
+    const newLocale = currentLocale === 'ar' ? 'en' : 'ar'
+    document.cookie = `locale=${newLocale}; path=/; max-age=31536000; SameSite=Lax`
+    setCurrentLocale(newLocale)
+    if (typeof document !== 'undefined') {
+      document.documentElement.lang = newLocale
+      document.documentElement.dir = newLocale === 'ar' ? 'rtl' : 'ltr'
+    }
+    if (onLocaleChange) {
+      onLocaleChange(newLocale)
+    }
     window.location.reload()
   }
 
@@ -110,14 +129,14 @@ export default function Navbar({ locale = 'en', onLocaleChange }: NavProps) {
           {/* Logo */}
           <Link
             href="/"
-            className="flex items-center gap-2 group"
+            className="flex items-center gap-2.5 group"
             aria-label="Sakura home"
           >
-            <div className="w-8 h-8 relative">
-              <Cherry
-                className="text-[var(--sakura-pink)] group-hover:scale-110 transition-transform"
-                size={32}
-                aria-hidden="true"
+            <div className="w-9 h-9 relative rounded-full overflow-hidden border border-pink-400/40 shadow-md flex-shrink-0 group-hover:border-pink-300 transition-colors">
+              <img
+                src="/logo.png"
+                alt="Sakura Logo"
+                className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
               />
             </div>
             <span className="font-bold text-xl text-white tracking-tight hidden sm:block">
@@ -140,12 +159,12 @@ export default function Navbar({ locale = 'en', onLocaleChange }: NavProps) {
             {/* Language toggle */}
             <button
               onClick={toggleLocale}
-              className="btn btn-ghost btn-sm text-[var(--muted-lavender)] hover:text-white"
+              className="btn btn-ghost btn-sm text-[var(--muted-lavender)] hover:text-white gap-1.5"
               aria-label={t('common.language')}
               id="locale-toggle"
             >
               <Globe size={16} aria-hidden="true" />
-              <span className="text-xs">{locale === 'en' ? 'عربي' : 'EN'}</span>
+              <span className="text-xs font-bold">{currentLocale === 'en' ? 'عربي' : 'EN'}</span>
             </button>
 
             {/* Join game CTA */}
@@ -222,6 +241,24 @@ export default function Navbar({ locale = 'en', onLocaleChange }: NavProps) {
             {isAdmin && (
               <MobileNavLink href="/admin" label={t('nav.admin')} onClick={() => setMobileOpen(false)} />
             )}
+
+            {/* Mobile Language Switcher */}
+            <button
+              onClick={() => {
+                toggleLocale()
+                setMobileOpen(false)
+              }}
+              className="flex items-center justify-between px-4 py-3 text-sm text-pink-100 hover:text-white rounded-xl bg-white/5 border border-pink-500/20 transition-all font-semibold my-1"
+            >
+              <div className="flex items-center gap-2">
+                <Globe size={18} className="text-pink-400" />
+                <span>{currentLocale === 'en' ? 'التحويل إلى العربية' : 'Switch to English'}</span>
+              </div>
+              <span className="px-2.5 py-0.5 rounded-full bg-pink-500/20 text-xs font-bold text-pink-300 border border-pink-500/30">
+                {currentLocale === 'en' ? 'عربي' : 'EN'}
+              </span>
+            </button>
+
             <hr className="border-[rgba(244,167,197,0.15)] my-2" />
             {user ? (
               <button

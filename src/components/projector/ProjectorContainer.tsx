@@ -99,13 +99,14 @@ export default function ProjectorContainer({ sessionId, locale = 'en' }: Project
         }
 
         // Fetch participants
-        const { data: parts } = await supabase
+        const { data: parts, error: partsErr } = await supabase
           .from('session_participants')
           .select('*')
           .eq('session_id', sessionId)
-          .order('total_score', { ascending: false })
+          .order('score', { ascending: false })
 
         if (parts) setParticipants(parts)
+        if (partsErr) console.error('Error fetching participants:', partsErr)
       } catch (err) {
         console.error('Initial load failure:', err)
       } finally {
@@ -116,8 +117,22 @@ export default function ProjectorContainer({ sessionId, locale = 'en' }: Project
     loadData()
   }, [sessionId])
 
-  // Realtime subscription setup
+  // Realtime subscription setup & polling fallback for robust real-time participant counts
   useEffect(() => {
+    const fetchLatestParticipants = () => {
+      supabase
+        .from('session_participants')
+        .select('*')
+        .eq('session_id', sessionId)
+        .order('score', { ascending: false })
+        .then(({ data, error }) => {
+          if (data && !error) setParticipants(data)
+        })
+    }
+
+    // Interval heartbeat to guarantee participants always sync even if network drops websocket frames
+    const syncInterval = setInterval(fetchLatestParticipants, 3000)
+
     const channel = supabase
       .channel(`projector_session_${sessionId}`)
       // Listen to game_sessions database changes
@@ -158,15 +173,7 @@ export default function ProjectorContainer({ sessionId, locale = 'en' }: Project
           filter: `session_id=eq.${sessionId}`,
         },
         () => {
-          // Re-fetch participants to keep order and counts accurate
-          supabase
-            .from('session_participants')
-            .select('*')
-            .eq('session_id', sessionId)
-            .order('total_score', { ascending: false })
-            .then(({ data }) => {
-              if (data) setParticipants(data)
-            })
+          fetchLatestParticipants()
         }
       )
       // Listen to custom Realtime broadcast events (strikes, buzzers, reveals)
@@ -200,6 +207,7 @@ export default function ProjectorContainer({ sessionId, locale = 'en' }: Project
       })
 
     return () => {
+      clearInterval(syncInterval)
       supabase.removeChannel(channel)
     }
   }, [sessionId])

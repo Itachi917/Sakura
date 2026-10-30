@@ -1,7 +1,8 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Clock, CheckCircle2, XCircle, Sparkles, HelpCircle } from 'lucide-react'
+import { createClient } from '@/lib/supabase/client'
 import type { GameSession, SessionParticipant } from '@/types/database'
 import type { QuizQuestionData } from '@/lib/gameData'
 import { sound } from '@/lib/sound'
@@ -27,17 +28,20 @@ export default function ProjectorQuiz({
   questions,
   locale = 'en',
 }: ProjectorQuizProps) {
+  const supabase = createClient()
   const isRtl = locale === 'ar'
   const questionIndex = getQuestionIndex(session)
   const currentQuestion = questions[questionIndex] || questions[0]
   const isRevealPhase = ['answer_reveal', 'round_results'].includes(session.status)
   const isSilhouetteMode = session.activity_type === 'whos_that_character'
+  const hasTriggeredReveal = useRef(false)
 
   // Timer state
   const [timeLeft, setTimeLeft] = useState<number>(currentQuestion?.time_limit_seconds || 20)
 
   useEffect(() => {
     setTimeLeft(currentQuestion?.time_limit_seconds || 20)
+    hasTriggeredReveal.current = false
   }, [questionIndex, currentQuestion?.time_limit_seconds])
 
   useEffect(() => {
@@ -47,6 +51,16 @@ export default function ProjectorQuiz({
       setTimeLeft(prev => {
         if (prev <= 1) {
           clearInterval(interval)
+          if (!hasTriggeredReveal.current) {
+            hasTriggeredReveal.current = true
+            sound.playBuzzer()
+            // When timer reaches 0, automatically reveal the correct answer and advance state
+            supabase
+              .from('game_sessions')
+              .update({ status: 'answer_reveal' })
+              .eq('id', session.id)
+              .then(() => {})
+          }
           return 0
         }
         if (prev <= 5) {
@@ -59,7 +73,7 @@ export default function ProjectorQuiz({
     }, 1000)
 
     return () => clearInterval(interval)
-  }, [session.status, questionIndex])
+  }, [session.status, questionIndex, session.id, supabase])
 
   if (!currentQuestion) return null
 
@@ -141,15 +155,17 @@ export default function ProjectorQuiz({
           </div>
         )}
 
-        {/* Question Text */}
+        {/* Question Text — Always prominent in Arabic */}
         <div className="flex-1 text-center md:text-start">
-          <h2 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-white leading-tight mb-4">
-            {isRtl ? currentQuestion.question_text_ar : currentQuestion.question_text}
+          <h2 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-white leading-tight mb-3">
+            {currentQuestion.question_text_ar || currentQuestion.question_text}
           </h2>
-          {/* Secondary language subtitle */}
-          <p className="text-sm sm:text-base text-pink-200/60 font-medium leading-relaxed">
-            {isRtl ? currentQuestion.question_text : currentQuestion.question_text_ar}
-          </p>
+          {/* Secondary English subtitle if available */}
+          {currentQuestion.question_text && currentQuestion.question_text !== currentQuestion.question_text_ar && (
+            <p className="text-sm sm:text-base text-pink-200/60 font-medium leading-relaxed">
+              {currentQuestion.question_text}
+            </p>
+          )}
         </div>
       </div>
 
@@ -184,14 +200,16 @@ export default function ProjectorQuiz({
                 {isRevealPhase && isCorrect ? <CheckCircle2 size={24} /> : theme.letter}
               </div>
 
-              {/* Option Text */}
+              {/* Option Text — Always in Arabic primarily */}
               <div className="flex-1 min-w-0">
                 <div className="text-lg sm:text-xl font-bold truncate">
-                  {isRtl ? option.text_ar : option.text}
+                  {option.text_ar || option.text}
                 </div>
-                <div className="text-xs sm:text-sm text-pink-200/50 truncate">
-                  {isRtl ? option.text : option.text_ar}
-                </div>
+                {option.text && option.text !== option.text_ar && (
+                  <div className="text-xs sm:text-sm text-pink-200/50 truncate">
+                    {option.text}
+                  </div>
+                )}
               </div>
             </div>
           )
@@ -199,7 +217,7 @@ export default function ProjectorQuiz({
       </div>
 
       {/* Answer Reveal Explanation Card */}
-      {isRevealPhase && (currentQuestion.explanation || currentQuestion.explanation_ar) && (
+      {isRevealPhase && (currentQuestion.explanation_ar || currentQuestion.explanation) && (
         <div className="w-full p-5 rounded-2xl bg-pink-950/40 border border-pink-400/30 backdrop-blur-md animate-slide-up flex items-start gap-3 shadow-xl">
           <Sparkles size={24} className="text-pink-300 shrink-0 mt-0.5" />
           <div>
@@ -207,7 +225,7 @@ export default function ProjectorQuiz({
               {isRtl ? 'المعلومة الكاملة والتفسير:' : 'Fact & Explanation:'}
             </span>
             <p className="text-sm sm:text-base text-pink-100 font-medium">
-              {isRtl ? currentQuestion.explanation_ar : currentQuestion.explanation}
+              {currentQuestion.explanation_ar || currentQuestion.explanation}
             </p>
           </div>
         </div>

@@ -20,7 +20,7 @@ export default async function PublicPassportPage({
 
   return (
     <div className="min-h-screen bg-[var(--midnight-plum)] text-white flex flex-col justify-between">
-      <Navbar />
+      <Navbar locale={locale} />
       <main className="flex-1 py-10 px-4 sm:px-6 max-w-5xl mx-auto w-full">
         <PassportBooklet targetUserId={id} locale={locale} />
       </main>

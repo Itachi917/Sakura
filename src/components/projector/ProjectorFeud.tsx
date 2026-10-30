@@ -93,7 +93,7 @@ export default function ProjectorFeud({
           <span>{isRtl ? `الجولة ${roundIndex + 1}` : `Round ${roundIndex + 1}`}</span>
         </div>
         <h2 className="text-2xl sm:text-3xl font-black text-white leading-tight">
-          {isRtl ? currentRound?.question_ar : currentRound?.question}
+          {currentRound?.question_ar || currentRound?.question}
         </h2>
       </div>
 
@@ -137,7 +137,7 @@ export default function ProjectorFeud({
                       {ans.sort_order}
                     </span>
                     <span className="text-xl sm:text-2xl font-black tracking-wide truncate">
-                      {isRtl ? ans.answer_text_ar : ans.answer_text}
+                      {ans.answer_text_ar || ans.answer_text}
                     </span>
                   </div>
                   <div className="font-mono text-2xl sm:text-3xl font-black px-4 py-1.5 rounded-xl bg-pink-500/20 border border-pink-400/30 text-pink-200 shadow-inner">

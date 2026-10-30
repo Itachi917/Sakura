@@ -946,3 +946,68 @@ input, textarea, select {
 .safe-top {
   padding-top: env(safe-area-inset-top);
 }
+
+/* ============================================================
+   SAKURA PETALS & LEAVES ANIMATION
+   ============================================================ */
+
+@keyframes petalFall {
+  0% {
+    transform: translateY(-40px) rotate(0deg);
+  }
+  100% {
+    transform: translateY(105vh) rotate(360deg);
+  }
+}
+
+@keyframes petalSway {
+  0%, 100% {
+    transform: translateX(0px) rotateZ(0deg);
+  }
+  25% {
+    transform: translateX(35px) rotateZ(15deg);
+  }
+  75% {
+    transform: translateX(-35px) rotateZ(-15deg);
+  }
+}
+
+@keyframes sakuraFall {
+  0% {
+    top: -60px;
+    opacity: 0;
+  }
+  10% {
+    opacity: var(--petal-opacity, 0.7);
+  }
+  90% {
+    opacity: var(--petal-opacity, 0.7);
+  }
+  100% {
+    top: 105vh;
+    opacity: 0;
+  }
+}
+
+@keyframes sakuraTumble {
+  0% {
+    transform: rotateX(0deg) rotateY(0deg) rotateZ(0deg) translateX(0);
+  }
+  33% {
+    transform: rotateX(120deg) rotateY(180deg) rotateZ(45deg) translateX(25px);
+  }
+  66% {
+    transform: rotateX(240deg) rotateY(90deg) rotateZ(-30deg) translateX(-25px);
+  }
+  100% {
+    transform: rotateX(360deg) rotateY(360deg) rotateZ(360deg) translateX(0);
+  }
+}
+
+.sakura-leaf-bg {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  overflow: hidden;
+}

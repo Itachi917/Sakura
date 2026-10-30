@@ -70,7 +70,6 @@ export default async function HomePage() {
 
   return (
     <>
-      <PetalAnimation />
       <Navbar locale={locale} />
 
       <main>

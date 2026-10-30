@@ -11,8 +11,10 @@ export default function Footer({ locale = 'en' }: { locale?: string }) {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-10">
           {/* Brand */}
           <div className="md:col-span-2">
-            <Link href="/" className="flex items-center gap-2 mb-4">
-              <Cherry className="text-[var(--sakura-pink)]" size={24} />
+            <Link href="/" className="flex items-center gap-2.5 mb-4 group">
+              <div className="w-8 h-8 rounded-full overflow-hidden border border-pink-400/30 flex-shrink-0">
+                <img src="/logo.png" alt="Sakura" className="w-full h-full object-cover group-hover:scale-110 transition-transform" />
+              </div>
               <span className="font-bold text-lg text-white">
                 さくら <span className="text-[var(--sakura-pink)]">Sakura</span>
               </span>

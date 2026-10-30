@@ -42,7 +42,9 @@ export default async function JoinPage({
           <span>{isRtl ? 'الرئيسية' : 'Home'}</span>
         </Link>
         <div className="flex items-center gap-2">
-          <Cherry className="text-[var(--sakura-pink)] animate-pulse" size={20} />
+          <div className="w-6 h-6 rounded-full overflow-hidden border border-pink-400/40 flex-shrink-0">
+            <img src="/logo.png" alt="Sakura" className="w-full h-full object-cover" />
+          </div>
           <span className="font-bold tracking-wider text-sm bg-gradient-to-r from-pink-200 to-pink-400 bg-clip-text text-transparent">
             SAKURA LIVE
           </span>
