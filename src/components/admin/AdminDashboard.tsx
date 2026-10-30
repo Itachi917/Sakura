@@ -38,6 +38,10 @@ import type {
   QuizQuestion,
 } from '@/types/database'
 import { generateNumericPin } from '@/lib/gameHelpers'
+import {
+  ZOOM_GUESS_QUESTIONS,
+  type ZoomGuessQuestionData,
+} from '@/lib/gameData'
 
 interface AdminDashboardProps {
   locale?: string
@@ -45,6 +49,7 @@ interface AdminDashboardProps {
 
 const ACTIVITIES: { id: ActivityType; name: string; name_ar: string; emoji: string }[] = [
   { id: 'whos_that_character', name: "Who's That Character?", name_ar: 'من هذه الشخصية؟', emoji: '🎭' },
+  { id: 'zoom_guess', name: 'Zoom & Guess', name_ar: 'خمن بالزووم (عدسة ساكورا)', emoji: '🔍' },
   { id: 'spacetoon_nostalgia', name: 'Spacetoon Nostalgia', name_ar: 'نوستالجيا سبيستون', emoji: '📺' },
   { id: 'anime_expert_exam', name: 'Anime Expert Exam', name_ar: 'اختبار خبير الأنمي', emoji: '📚' },
   { id: 'sakura_feud', name: 'Sakura Feud', name_ar: 'فيود ساكورا', emoji: '⚔️' },
@@ -64,7 +69,7 @@ export default function AdminDashboard({ locale = 'en' }: AdminDashboardProps) {
   const isRtl = locale === 'ar'
 
   // Navigation tab
-  const [activeTab, setActiveTab] = useState<'sessions' | 'events' | 'stamps' | 'quizzes'>('sessions')
+  const [activeTab, setActiveTab] = useState<'sessions' | 'events' | 'stamps' | 'quizzes' | 'zoom_guess'>('sessions')
 
   // Global Admin State
   const [loading, setLoading] = useState(true)
@@ -139,6 +144,24 @@ export default function AdminDashboard({ locale = 'en' }: AdminDashboardProps) {
     explanation_ar: '',
   })
 
+  // 5. Zoom & Guess Questions State
+  const [zoomQuestions, setZoomQuestions] = useState<ZoomGuessQuestionData[]>(ZOOM_GUESS_QUESTIONS)
+  const [showZoomModal, setShowZoomModal] = useState(false)
+  const [editingZoomId, setEditingZoomId] = useState<string | null>(null)
+  const [zoomForm, setZoomForm] = useState({
+    image_url: '',
+    character_name: '',
+    character_name_ar: '',
+    aliases: '',
+    anime_origin: '',
+    anime_origin_ar: '',
+    hint: '',
+    hint_ar: '',
+    focus_point: '50% 30%',
+    total_time_seconds: 40,
+    base_points: 1000,
+  })
+
   // Helper feedback timer
   const showFeedback = (text: string, type: 'success' | 'error' = 'success') => {
     setFeedbackMsg({ text, type })
@@ -192,18 +215,41 @@ export default function AdminDashboard({ locale = 'en' }: AdminDashboardProps) {
       const pin = generateNumericPin()
       const dummyAdminId = '00000000-0000-0000-0000-000000000000'
 
-      const { data: newSess, error } = await supabase
+      const settingsPayload: Record<string, unknown> = { question_index: 0 }
+      if (selectedActivity === 'zoom_guess') {
+        settingsPayload.game_mode = 'zoom_guess'
+      }
+
+      let { data: newSess, error } = await supabase
         .from('game_sessions')
         .insert({
           activity_type: selectedActivity,
           room_pin: pin,
           status: 'lobby',
           host_id: user?.id || dummyAdminId,
-          settings: { question_index: 0 },
+          settings: settingsPayload as unknown as import('@/types/database').Json,
           created_at: new Date().toISOString(),
         })
         .select()
         .single()
+
+      // If enum not yet migrated in Supabase, fallback cleanly
+      if (error && selectedActivity === 'zoom_guess') {
+        const fallbackRes = await supabase
+          .from('game_sessions')
+          .insert({
+            activity_type: 'whos_that_character',
+            room_pin: pin,
+            status: 'lobby',
+            host_id: user?.id || dummyAdminId,
+            settings: { question_index: 0, game_mode: 'zoom_guess' } as unknown as import('@/types/database').Json,
+            created_at: new Date().toISOString(),
+          })
+          .select()
+          .single()
+        newSess = fallbackRes.data
+        error = fallbackRes.error
+      }
 
       if (error || !newSess) throw error
 
@@ -521,6 +567,7 @@ export default function AdminDashboard({ locale = 'en' }: AdminDashboardProps) {
       <div className="flex items-center gap-2 border-b border-pink-500/20 pb-2 overflow-x-auto scrollbar-none">
         {[
           { id: 'sessions', label: isRtl ? '🎮 الألعاب الحية' : '🎮 Live Games', count: sessions.length },
+          { id: 'zoom_guess', label: isRtl ? '🔍 خمن بالزووم' : '🔍 Zoom & Guess Questions', count: zoomQuestions.length },
           { id: 'events', label: isRtl ? '📅 إدارة الفعاليات' : '📅 Campus Events', count: events.length },
           { id: 'stamps', label: isRtl ? '🎖️ الشارات والأختام' : '🎖️ Badges & Stamps', count: stamps.length },
           { id: 'quizzes', label: isRtl ? '📚 بنك الأسئلة والكويز' : '📚 Quizzes & Questions', count: quizzes.length },
@@ -980,6 +1027,150 @@ export default function AdminDashboard({ locale = 'en' }: AdminDashboardProps) {
       )}
 
       {/* ============================================================ */}
+      {/* TAB 5: ZOOM & GUESS QUESTIONS MANAGEMENT */}
+      {/* ============================================================ */}
+      {activeTab === 'zoom_guess' && (
+        <div className="space-y-6 animate-fade-in">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div>
+              <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                <span className="text-2xl">🔍</span>
+                <span>{isRtl ? 'بنك أسئلة خمن بالزووم (عدسة ساكورا)' : 'Zoom & Guess Character Bank'}</span>
+              </h2>
+              <p className="text-xs text-pink-200/70 mt-1">
+                {isRtl
+                  ? 'تبدأ الصورة مقصوصة ومكبرة جداً، وتصغر تلقائياً كل 10 ثوانٍ. واللاعب الأسرع يحصد أعلى النقاط!'
+                  : 'Image starts zoomed in / cropped, zooming out every 10 seconds. Fastest player wins maximum points!'}
+              </p>
+            </div>
+
+            <button
+              onClick={() => {
+                setEditingZoomId(null)
+                setZoomForm({
+                  image_url: 'https://images.unsplash.com/photo-1578632767115-351597cf2477?w=1000&auto=format&fit=crop',
+                  character_name: '',
+                  character_name_ar: '',
+                  aliases: '',
+                  anime_origin: '',
+                  anime_origin_ar: '',
+                  hint: '',
+                  hint_ar: '',
+                  focus_point: '50% 30%',
+                  total_time_seconds: 40,
+                  base_points: 1000,
+                })
+                setShowZoomModal(true)
+              }}
+              className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-500 hover:to-purple-500 text-white font-extrabold text-xs sm:text-sm flex items-center gap-1.5 shadow-lg shadow-pink-600/30"
+            >
+              <Plus size={16} />
+              <span>{isRtl ? 'إضافة شخصية جديدة 🔍' : 'Add Zoom Character 🔍'}</span>
+            </button>
+          </div>
+
+          {/* Questions Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+            {zoomQuestions.map((q, idx) => (
+              <div
+                key={q.id}
+                className="rounded-3xl bg-black/40 border-2 border-pink-500/20 backdrop-blur-xl overflow-hidden flex flex-col justify-between hover:border-pink-400/40 transition-all shadow-xl"
+              >
+                <div>
+                  {/* Image Preview with Zoom Simulation */}
+                  <div className="relative aspect-[16/10] bg-black overflow-hidden border-b border-pink-500/20">
+                    <img
+                      src={q.image_url}
+                      alt={q.character_name}
+                      className="w-full h-full object-cover select-none"
+                    />
+                    <div className="absolute top-2.5 left-2.5 px-2.5 py-0.5 rounded-full bg-black/70 backdrop-blur-md text-[10px] font-mono font-bold text-pink-300 border border-white/10">
+                      #{idx + 1} • {q.base_points} PTS
+                    </div>
+                    <div className="absolute top-2.5 right-2.5 px-2.5 py-0.5 rounded-full bg-black/70 backdrop-blur-md text-[10px] font-mono font-bold text-amber-300 border border-white/10">
+                      {q.total_time_seconds}s (10s/step)
+                    </div>
+                  </div>
+
+                  <div className="p-5 space-y-3">
+                    <div>
+                      <h3 className="text-lg font-black text-white">
+                        {isRtl ? q.character_name_ar : q.character_name}
+                      </h3>
+                      <div className="text-xs text-pink-300/80 font-bold">
+                        {q.character_name} • {isRtl ? q.anime_origin_ar : q.anime_origin}
+                      </div>
+                    </div>
+
+                    <div className="p-2.5 rounded-xl bg-white/5 border border-white/5 text-xs text-pink-100/70">
+                      <span className="font-bold text-pink-300">💡 {isRtl ? 'التلميح:' : 'Clue:'} </span>
+                      <span>{isRtl ? q.hint_ar : q.hint}</span>
+                    </div>
+
+                    {q.aliases && q.aliases.length > 0 && (
+                      <div>
+                        <span className="text-[10px] uppercase font-bold text-pink-300/70 block mb-1">
+                          {isRtl ? 'الأسماء المقبولة:' : 'Aliases:'}
+                        </span>
+                        <div className="flex flex-wrap gap-1">
+                          {q.aliases.map((a, i) => (
+                            <span
+                              key={i}
+                              className="px-2 py-0.5 rounded-md bg-pink-500/10 border border-pink-400/20 text-[10px] text-pink-200"
+                            >
+                              {a}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="p-4 border-t border-white/5 flex items-center justify-between">
+                  <button
+                    onClick={() => {
+                      setEditingZoomId(q.id)
+                      setZoomForm({
+                        image_url: q.image_url,
+                        character_name: q.character_name,
+                        character_name_ar: q.character_name_ar,
+                        aliases: q.aliases.join(', '),
+                        anime_origin: q.anime_origin,
+                        anime_origin_ar: q.anime_origin_ar,
+                        hint: q.hint,
+                        hint_ar: q.hint_ar,
+                        focus_point: q.focus_point || '50% 30%',
+                        total_time_seconds: q.total_time_seconds,
+                        base_points: q.base_points,
+                      })
+                      setShowZoomModal(true)
+                    }}
+                    className="px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-pink-200 font-bold text-xs flex items-center gap-1.5 transition-colors"
+                  >
+                    <Edit2 size={13} />
+                    <span>{isRtl ? 'تعديل' : 'Edit'}</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      if (!confirm(isRtl ? 'حذف هذا السؤال من بنك الزووم؟' : 'Delete this zoom question?')) return
+                      setZoomQuestions(prev => prev.filter(item => item.id !== q.id))
+                      showFeedback(isRtl ? 'تم حذف السؤال من بنك الزووم' : 'Question removed from Zoom bank')
+                    }}
+                    className="p-1.5 rounded-lg text-red-400 hover:bg-red-500/20 transition-colors"
+                    title="Delete"
+                  >
+                    <Trash2 size={15} />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================ */}
       {/* MODAL 1: ADD/EDIT EVENT */}
       {/* ============================================================ */}
       {showEventModal && (
@@ -1361,6 +1552,244 @@ export default function AdminDashboard({ locale = 'en' }: AdminDashboardProps) {
                   className="px-5 py-2.5 rounded-xl bg-pink-600 hover:bg-pink-500 text-white font-extrabold shadow-lg"
                 >
                   {isRtl ? 'حفظ السؤال في الكويز' : 'Save Question'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================ */}
+      {/* MODAL 5: ADD / EDIT ZOOM & GUESS QUESTION */}
+      {/* ============================================================ */}
+      {showZoomModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md animate-fade-in overflow-y-auto">
+          <div className="w-full max-w-xl bg-[#20102c] border-2 border-pink-500/30 rounded-3xl p-6 sm:p-8 shadow-2xl relative my-8">
+            <h3 className="text-xl font-black text-white mb-2 flex items-center gap-2">
+              <span className="text-2xl">🔍</span>
+              <span>
+                {editingZoomId
+                  ? (isRtl ? 'تعديل سؤال الزووم 🔍' : 'Edit Zoom Character Question 🔍')
+                  : (isRtl ? 'إضافة سؤال زووم جديد 🔍' : 'Add New Zoom Character Question 🔍')}
+              </span>
+            </h3>
+            <p className="text-xs text-pink-200/70 mb-4">
+              {isRtl
+                ? 'حدد رابط صورة الشخصية والإجابات المقبولة ونقطة تركيز التكبير'
+                : 'Provide image URL, accepted answer aliases, and zoom focus point'}
+            </p>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault()
+                sound.playClick()
+
+                const newQuestion: ZoomGuessQuestionData = {
+                  id: editingZoomId || `zg-custom-${Date.now()}`,
+                  image_url: zoomForm.image_url.trim() || 'https://images.unsplash.com/photo-1578632767115-351597cf2477?w=1000&auto=format&fit=crop',
+                  character_name: zoomForm.character_name.trim(),
+                  character_name_ar: zoomForm.character_name_ar.trim() || zoomForm.character_name.trim(),
+                  aliases: zoomForm.aliases
+                    .split(/[,،]/)
+                    .map(a => a.trim())
+                    .filter(Boolean),
+                  anime_origin: zoomForm.anime_origin.trim() || 'Anime',
+                  anime_origin_ar: zoomForm.anime_origin_ar.trim() || 'أنمي',
+                  hint: zoomForm.hint.trim() || 'Anime character clue',
+                  hint_ar: zoomForm.hint_ar.trim() || 'تلميح عن الشخصية',
+                  focus_point: zoomForm.focus_point || '50% 30%',
+                  total_time_seconds: Number(zoomForm.total_time_seconds) || 40,
+                  base_points: Number(zoomForm.base_points) || 1000,
+                }
+
+                if (editingZoomId) {
+                  setZoomQuestions(prev => prev.map(q => q.id === editingZoomId ? newQuestion : q))
+                  showFeedback(isRtl ? 'تم تحديث السؤال بنجاح! 🔍' : 'Question updated! 🔍')
+                } else {
+                  setZoomQuestions(prev => [newQuestion, ...prev])
+                  showFeedback(isRtl ? 'تمت إضافة السؤال لبنك الزووم! 🔍' : 'Zoom question added! 🔍')
+                }
+
+                setShowZoomModal(false)
+                setEditingZoomId(null)
+              }}
+              className="space-y-4 text-xs sm:text-sm"
+            >
+              {/* Image URL & Live Preview */}
+              <div>
+                <label className="block text-pink-200 font-bold mb-1">
+                  {isRtl ? 'رابط صورة الشخصية (URL)' : 'Character Image URL'}
+                </label>
+                <input
+                  type="url"
+                  value={zoomForm.image_url}
+                  onChange={e => setZoomForm({ ...zoomForm, image_url: e.target.value })}
+                  placeholder="https://example.com/character.jpg"
+                  className="w-full p-2.5 rounded-xl bg-black/50 border border-pink-400/30 text-white font-mono text-xs"
+                  required
+                />
+                {zoomForm.image_url && (
+                  <div className="mt-2 w-full h-32 rounded-2xl overflow-hidden border border-pink-400/30 bg-black flex items-center justify-center">
+                    <img
+                      src={zoomForm.image_url}
+                      alt="Preview"
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1578632767115-351597cf2477?w=1000&auto=format&fit=crop'
+                      }}
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Character Names in Arabic & English */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-pink-200 font-bold mb-1">
+                    {isRtl ? 'اسم الشخصية بالعربية (الأساسي)' : 'Character Name (Arabic)'}
+                  </label>
+                  <input
+                    type="text"
+                    value={zoomForm.character_name_ar}
+                    onChange={e => setZoomForm({ ...zoomForm, character_name_ar: e.target.value })}
+                    placeholder="مثال: ناروتو أوزوماكي"
+                    className="w-full p-2.5 rounded-xl bg-black/50 border border-pink-400/30 text-white"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-pink-200 font-bold mb-1">
+                    {isRtl ? 'اسم الشخصية بالإنجليزية' : 'Character Name (English)'}
+                  </label>
+                  <input
+                    type="text"
+                    value={zoomForm.character_name}
+                    onChange={e => setZoomForm({ ...zoomForm, character_name: e.target.value })}
+                    placeholder="e.g. Naruto Uzumaki"
+                    className="w-full p-2.5 rounded-xl bg-black/50 border border-pink-400/30 text-white"
+                    required
+                  />
+                </div>
+              </div>
+
+              {/* Accepted Aliases */}
+              <div>
+                <label className="block text-pink-200 font-bold mb-1">
+                  {isRtl ? 'الأسماء والتهجئات المقبولة الأخرى (افصل بينها بفواصل)' : 'Accepted Aliases & Alternate Spellings (Comma separated)'}
+                </label>
+                <input
+                  type="text"
+                  value={zoomForm.aliases}
+                  onChange={e => setZoomForm({ ...zoomForm, aliases: e.target.value })}
+                  placeholder="ناروتو, اوزوماكي, Naruto, Uzumaki"
+                  className="w-full p-2.5 rounded-xl bg-black/50 border border-pink-400/30 text-white"
+                />
+              </div>
+
+              {/* Anime Origin in Arabic & English */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-pink-200 font-bold mb-1">
+                    {isRtl ? 'اسم الأنمي بالعربية' : 'Anime Origin (Arabic)'}
+                  </label>
+                  <input
+                    type="text"
+                    value={zoomForm.anime_origin_ar}
+                    onChange={e => setZoomForm({ ...zoomForm, anime_origin_ar: e.target.value })}
+                    placeholder="مثال: ناروتو شيبودن"
+                    className="w-full p-2.5 rounded-xl bg-black/50 border border-pink-400/30 text-white"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-pink-200 font-bold mb-1">
+                    {isRtl ? 'اسم الأنمي بالإنجليزية' : 'Anime Origin (English)'}
+                  </label>
+                  <input
+                    type="text"
+                    value={zoomForm.anime_origin}
+                    onChange={e => setZoomForm({ ...zoomForm, anime_origin: e.target.value })}
+                    placeholder="e.g. Naruto Shippuden"
+                    className="w-full p-2.5 rounded-xl bg-black/50 border border-pink-400/30 text-white"
+                  />
+                </div>
+              </div>
+
+              {/* Clues */}
+              <div>
+                <label className="block text-pink-200 font-bold mb-1">
+                  {isRtl ? 'التلميح بالعربية' : 'Clue / Hint (Arabic)'}
+                </label>
+                <input
+                  type="text"
+                  value={zoomForm.hint_ar}
+                  onChange={e => setZoomForm({ ...zoomForm, hint_ar: e.target.value })}
+                  placeholder="مثال: نينجا قرية كونوها صاحب عزيمة جبارة"
+                  className="w-full p-2.5 rounded-xl bg-black/50 border border-pink-400/30 text-white"
+                />
+              </div>
+
+              {/* Focus Point & Settings */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-pink-200 font-bold mb-1">
+                    {isRtl ? 'نقطة تركيز التكبير' : 'Zoom Focus Point'}
+                  </label>
+                  <select
+                    value={zoomForm.focus_point}
+                    onChange={e => setZoomForm({ ...zoomForm, focus_point: e.target.value })}
+                    className="w-full p-2 rounded-xl bg-black/50 border border-pink-400/30 text-white text-xs"
+                  >
+                    <option value="50% 30%">Face & Eyes (50% 30%)</option>
+                    <option value="50% 20%">Hair / Forehead (50% 20%)</option>
+                    <option value="50% 50%">Center (50% 50%)</option>
+                    <option value="35% 35%">Top-Left (35% 35%)</option>
+                    <option value="65% 35%">Top-Right (65% 35%)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-pink-200 font-bold mb-1">
+                    {isRtl ? 'الوقت الإجمالي (ث)' : 'Total Time (s)'}
+                  </label>
+                  <input
+                    type="number"
+                    value={zoomForm.total_time_seconds}
+                    onChange={e => setZoomForm({ ...zoomForm, total_time_seconds: Number(e.target.value) })}
+                    className="w-full p-2 rounded-xl bg-black/50 border border-pink-400/30 text-white"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-pink-200 font-bold mb-1">
+                    {isRtl ? 'النقاط القصوى' : 'Base Points'}
+                  </label>
+                  <input
+                    type="number"
+                    value={zoomForm.base_points}
+                    onChange={e => setZoomForm({ ...zoomForm, base_points: Number(e.target.value) })}
+                    className="w-full p-2 rounded-xl bg-black/50 border border-pink-400/30 text-white"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-4 border-t border-white/5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowZoomModal(false)
+                    setEditingZoomId(null)
+                  }}
+                  className="px-4 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-pink-200 font-bold"
+                >
+                  {isRtl ? 'إلغاء' : 'Cancel'}
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-500 text-white font-extrabold shadow-lg"
+                >
+                  {isRtl ? 'حفظ الشخصية في البنك' : 'Save Character'}
                 </button>
               </div>
             </form>

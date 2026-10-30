@@ -472,3 +472,137 @@ export const DEFAULT_TITLES = [
     unlock_condition_text_ar: 'حضور 5 فعاليات حضورية',
   },
 ]
+
+// ------------------------------------------------------------
+// 6. "ZOOM & GUESS" (خمن بالزووم — عدسة ساكورا)
+// Image starts heavily cropped / zoomed in, zooming out every 10 seconds.
+// ------------------------------------------------------------
+export interface ZoomGuessQuestionData {
+  id: string
+  image_url: string
+  character_name: string
+  character_name_ar: string
+  aliases: string[]
+  anime_origin: string
+  anime_origin_ar: string
+  hint: string
+  hint_ar: string
+  focus_point?: string // CSS transform-origin: e.g. '50% 25%'
+  total_time_seconds: number // default 40s (10s intervals)
+  base_points: number // default 1000
+}
+
+export const ZOOM_GUESS_QUESTIONS: ZoomGuessQuestionData[] = [
+  {
+    id: 'zg-1',
+    image_url: 'https://images.unsplash.com/photo-1578632767115-351597cf2477?w=1000&auto=format&fit=crop',
+    character_name: 'Naruto Uzumaki',
+    character_name_ar: 'ناروتو أوزوماكي',
+    aliases: ['ناروتو', 'اوزوماكي', 'Naruto', 'Uzumaki', 'Hokage', 'الهوكاجي'],
+    anime_origin: 'Naruto Shippuden',
+    anime_origin_ar: 'ناروتو شيبودن',
+    hint: 'Wears an iconic orange jumpsuit and carries the Nine-Tails!',
+    hint_ar: 'نينجا من قرية كونوها صاحب عزيمة لا تلين ورمز الثعلب ذو الذيول التسعة!',
+    focus_point: '50% 25%',
+    total_time_seconds: 40,
+    base_points: 1000,
+  },
+  {
+    id: 'zg-2',
+    image_url: 'https://images.unsplash.com/photo-1607604276583-eef5d076aa5f?w=1000&auto=format&fit=crop',
+    character_name: 'Monkey D. Luffy',
+    character_name_ar: 'مونكي دي لوفي',
+    aliases: ['لوفي', 'Luffy', 'Straw Hat', 'قبعة القش', 'مونكي'],
+    anime_origin: 'One Piece',
+    anime_origin_ar: 'ون بيس',
+    hint: 'Aims to find the greatest treasure and become King of the Pirates!',
+    hint_ar: 'قبطان قراصنة قبعة القش وصاحب جسد المطاط الذي يطمح لملك القراصنة!',
+    focus_point: '48% 28%',
+    total_time_seconds: 40,
+    base_points: 1000,
+  },
+  {
+    id: 'zg-3',
+    image_url: 'https://images.unsplash.com/photo-1534447677768-be436bb09401?w=1000&auto=format&fit=crop',
+    character_name: 'Conan Edogawa',
+    character_name_ar: 'كونان إيدوجاوا',
+    aliases: ['كونان', 'سينشي', 'سينشي كودو', 'Conan', 'Shinichi', 'Detective Conan', 'المحقق كونان'],
+    anime_origin: 'Detective Conan',
+    anime_origin_ar: 'المحقق كونان',
+    hint: 'Genius detective shrunk into an elementary school child!',
+    hint_ar: 'المحقق الذكي الذي تقلص جسده بسبب عقار المنظمة السوداء!',
+    focus_point: '52% 42%',
+    total_time_seconds: 40,
+    base_points: 1000,
+  },
+  {
+    id: 'zg-4',
+    image_url: 'https://images.unsplash.com/photo-1563089145-599997674d42?w=1000&auto=format&fit=crop',
+    character_name: 'Levi Ackerman',
+    character_name_ar: 'ليفاي أكرمان',
+    aliases: ['ليفاي', 'اكرمان', 'Levi', 'Ackerman', 'Captain Levi', 'القائد ليفاي'],
+    anime_origin: 'Attack on Titan',
+    anime_origin_ar: 'هجوم العمالقة',
+    hint: 'Humanity’s strongest soldier with dual blades and cravat!',
+    hint_ar: 'الجندي الأقوى في البشرية وقائد العمليات الخاصة في فيلق الاستكشاف!',
+    focus_point: '50% 32%',
+    total_time_seconds: 40,
+    base_points: 1000,
+  },
+  {
+    id: 'zg-5',
+    image_url: 'https://images.unsplash.com/photo-1569003339405-ea396a5a8a90?w=1000&auto=format&fit=crop',
+    character_name: 'Goku',
+    character_name_ar: 'غوكو',
+    aliases: ['سون غوكو', 'غوكو', 'Goku', 'Son Goku', 'Kakarot', 'كاكاروت'],
+    anime_origin: 'Dragon Ball Z',
+    anime_origin_ar: 'دراغون بول',
+    hint: 'Saiyan warrior raised on Earth who protects the universe with Kamehameha!',
+    hint_ar: 'محارب السايان الأسطوري صاحب الشعر الذهبي وضربة الكامي هامي ها!',
+    focus_point: '50% 20%',
+    total_time_seconds: 40,
+    base_points: 1000,
+  },
+  {
+    id: 'zg-6',
+    image_url: 'https://images.unsplash.com/photo-1579783900882-c0d3dad7b119?w=1000&auto=format&fit=crop',
+    character_name: 'Tanjiro Kamado',
+    character_name_ar: 'تانجيرو كامادو',
+    aliases: ['تانجيرو', 'Tanjiro', 'Kamado', 'كامادو', 'قاتل الشياطين'],
+    anime_origin: 'Demon Slayer (Kimetsu no Yaiba)',
+    anime_origin_ar: 'قاتل الشياطين',
+    hint: 'Wears hanafuda earrings and checkered haori, wielding water & sun breathing!',
+    hint_ar: 'صاحب قرطي الهانافودا والسترة المربعة الذي يسعى لإعادة أخته إنسية!',
+    focus_point: '52% 35%',
+    total_time_seconds: 40,
+    base_points: 1000,
+  },
+  {
+    id: 'zg-7',
+    image_url: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=1000&auto=format&fit=crop',
+    character_name: 'Satoru Gojo',
+    character_name_ar: 'ساتورو غوجو',
+    aliases: ['غوجو', 'ساتورو', 'Gojo', 'Satoru', 'Gojo Satoru'],
+    anime_origin: 'Jujutsu Kaisen',
+    anime_origin_ar: 'جوجوتسو كايسن',
+    hint: 'The strongest modern jujutsu sorcerer with infinite void and blindfold!',
+    hint_ar: 'أقوى مستعمل لعنات حديث، صاحب العيون الستة وتقنية اللانهاية!',
+    focus_point: '50% 28%',
+    total_time_seconds: 40,
+    base_points: 1000,
+  },
+  {
+    id: 'zg-8',
+    image_url: 'https://images.unsplash.com/photo-1613771404784-3a5686aa2be3?w=1000&auto=format&fit=crop',
+    character_name: 'Pikachu',
+    character_name_ar: 'بيكاتشو',
+    aliases: ['بيكاتشو', 'Pikachu', 'بوكيمون', 'Pokemon'],
+    anime_origin: 'Pokemon',
+    anime_origin_ar: 'بوكيمون',
+    hint: 'Electric-type mouse with red cheeks and lightning bolt tail!',
+    hint_ar: 'البوكيمون الكهربائي الأصفر المحبوب، رفيق آش كيتشوم الأبدي!',
+    focus_point: '50% 40%',
+    total_time_seconds: 40,
+    base_points: 1000,
+  },
+]

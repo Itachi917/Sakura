@@ -15,6 +15,7 @@ export const metadata: Metadata = {
 }
 
 const ACTIVITIES = [
+  { id: 'zoom_guess', emoji: '🔍', color: '#ec4899', bgColor: 'rgba(236, 72, 153, 0.08)', borderColor: 'rgba(236, 72, 153, 0.35)' },
   { id: 'whos_that_character', emoji: '🎭', color: '#D96C9D', bgColor: 'rgba(217, 108, 157, 0.08)', borderColor: 'rgba(217, 108, 157, 0.25)' },
   { id: 'spacetoon_nostalgia', emoji: '📺', color: '#5B8AE8', bgColor: 'rgba(91, 138, 232, 0.08)', borderColor: 'rgba(91, 138, 232, 0.25)' },
   { id: 'anime_expert_exam', emoji: '📚', color: '#438A68', bgColor: 'rgba(67, 138, 104, 0.08)', borderColor: 'rgba(67, 138, 104, 0.25)' },
@@ -23,6 +24,10 @@ const ACTIVITIES = [
 ]
 
 const ACTIVITY_LABELS: Record<string, Record<string, { name: string; desc: string }>> = {
+  zoom_guess: {
+    en: { name: 'Zoom & Guess', desc: 'Starts heavily cropped, zooming out every 10s. Guess faster for maximum points with near-miss hints!' },
+    ar: { name: 'خمن بالزووم', desc: 'تبدأ الصورة مقصوصة ومكبرة، وتصغر كل 10 ثوانٍ. خمن أسرع لتحصد أعلى النقاط مع تنبيهات القرب!' },
+  },
   whos_that_character: {
     en: { name: "Who's That Character?", desc: 'Identify anime characters from silhouettes, clues, and cropped images.' },
     ar: { name: 'من هذه الشخصية؟', desc: 'تعرّف على شخصيات الأنمي من الصور الظلية والأدلة.' },
@@ -155,7 +160,7 @@ export default async function HomePage() {
                       </span>
                     </div>
                     <span className="text-[10px] font-mono font-bold px-2.5 py-0.5 rounded-full bg-pink-500/20 border border-pink-400/30 text-pink-200">
-                      IAU CLUB
+                      SU CLUB
                     </span>
                   </div>
 
@@ -170,8 +175,8 @@ export default async function HomePage() {
                     </h3>
                     <p className="text-xs text-pink-200/70 mt-1">
                       {isRtl
-                        ? 'جامعة الإمام عبدالرحمن بن فيصل • منصة تفاعلية'
-                        : 'Imam Abdulrahman Bin Faisal University'}
+                        ? 'جامعة صحار • منصة تفاعلية'
+                        : 'Sohar University • Interactive Club Platform'}
                     </p>
                   </div>
 
@@ -363,11 +368,10 @@ export default async function HomePage() {
                       {['🌸', '⚔️', '🎭', '📺', '🎨', '📚', '🏆', '✨'].map((emoji, i) => (
                         <div
                           key={i}
-                          className={`w-14 h-14 rounded-2xl flex items-center justify-center text-2xl transition-all ${
-                            i < 5
+                          className={`w-14 h-14 rounded-2xl flex items-center justify-center text-2xl transition-all ${i < 5
                               ? 'bg-[rgba(244,167,197,0.2)] border-2 border-[var(--sakura-pink)] shadow-[0_0_12px_rgba(244,167,197,0.3)]'
                               : 'bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.1)] opacity-40'
-                          }`}
+                            }`}
                           aria-label={i < 5 ? 'Earned stamp' : 'Locked stamp'}
                         >
                           {i < 5 ? emoji : '🔒'}

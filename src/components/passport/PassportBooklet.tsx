@@ -281,8 +281,8 @@ export default function PassportBooklet({
               </h1>
               <p className="text-xs text-pink-200/60 mt-1">
                 {isRtl
-                  ? 'الجواز الرقمي الرسمي — جامعة الإمام عبدالرحمن بن فيصل'
-                  : 'Official Club Digital Passport — University Anime Society'}
+                  ? 'الجواز الرقمي الرسمي — جامعة صحار'
+                  : 'Official Club Digital Passport — Sohar University'}
               </p>
             </div>
           </div>

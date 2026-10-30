@@ -10,13 +10,16 @@ import ProjectorQuiz from './ProjectorQuiz'
 import ProjectorFeud from './ProjectorFeud'
 import ProjectorDraw from './ProjectorDraw'
 import ProjectorLeaderboard from './ProjectorLeaderboard'
+import ProjectorZoomGuess from './ProjectorZoomGuess'
 import {
   WHOS_THAT_CHARACTER_QUESTIONS,
   SPACETOON_NOSTALGIA_QUESTIONS,
   ANIME_EXPERT_EXAM_QUESTIONS,
   SAKURA_FEUD_ROUNDS,
+  ZOOM_GUESS_QUESTIONS,
   type QuizQuestionData,
-  type FeudQuestionData
+  type FeudQuestionData,
+  type ZoomGuessQuestionData,
 } from '@/lib/gameData'
 
 interface ProjectorContainerProps {
@@ -37,6 +40,7 @@ export default function ProjectorContainer({ sessionId, locale = 'en' }: Project
 
   // Game state
   const [quizQuestions, setQuizQuestions] = useState<QuizQuestionData[]>([])
+  const [zoomQuestions, setZoomQuestions] = useState<ZoomGuessQuestionData[]>(ZOOM_GUESS_QUESTIONS)
   const [feudRounds, setFeudRounds] = useState<FeudQuestionData[]>(SAKURA_FEUD_ROUNDS)
   const [feudRoundState, setFeudRoundState] = useState<{
     team1Score: number
@@ -108,7 +112,10 @@ export default function ProjectorContainer({ sessionId, locale = 'en' }: Project
         setSession(sessData)
 
         // Select proper question set based on activity type
-        if (sessData.activity_type === 'whos_that_character') {
+        const isZoomGame = sessData.activity_type === 'zoom_guess' || (sessData.settings as any)?.game_mode === 'zoom_guess'
+        if (isZoomGame) {
+          setZoomQuestions(ZOOM_GUESS_QUESTIONS)
+        } else if (sessData.activity_type === 'whos_that_character') {
           setQuizQuestions(WHOS_THAT_CHARACTER_QUESTIONS)
         } else if (sessData.activity_type === 'spacetoon_nostalgia') {
           setQuizQuestions(SPACETOON_NOSTALGIA_QUESTIONS)
@@ -381,10 +388,33 @@ export default function ProjectorContainer({ sessionId, locale = 'en' }: Project
           </div>
         )}
 
+        {/* ZOOM & GUESS STAGE */}
+        {(session.activity_type === 'zoom_guess' || (session.settings as any)?.game_mode === 'zoom_guess') &&
+          ['question_active', 'answer_collection_ended', 'answer_reveal', 'round_results'].includes(
+            session.status
+          ) && (
+            <ProjectorZoomGuess
+              session={session}
+              participants={participants}
+              currentQuestion={
+                zoomQuestions[
+                  Math.min(
+                    zoomQuestions.length - 1,
+                    (session.settings as any)?.question_index || 0
+                  )
+                ] || zoomQuestions[0]
+              }
+              questionIndex={(session.settings as any)?.question_index || 0}
+              totalQuestions={zoomQuestions.length}
+              locale={locale}
+            />
+          )}
+
         {/* QUIZ STAGE (Who\'s That Character, Spacetoon Nostalgia, Anime Expert) */}
         {['whos_that_character', 'spacetoon_nostalgia', 'anime_expert_exam'].includes(
           session.activity_type
         ) &&
+          !((session.settings as any)?.game_mode === 'zoom_guess') &&
           ['question_active', 'answer_collection_ended', 'answer_reveal', 'round_results'].includes(
             session.status
           ) && (

@@ -43,9 +43,17 @@ EXCEPTION WHEN duplicate_object THEN null; END $$;
 DO $$ BEGIN
   CREATE TYPE activity_type AS ENUM (
     'whos_that_character', 'spacetoon_nostalgia', 'anime_expert_exam',
-    'sakura_feud', 'draw_it_guess_it'
+    'sakura_feud', 'draw_it_guess_it', 'zoom_guess'
   );
-EXCEPTION WHEN duplicate_object THEN null; END $$;
+EXCEPTION WHEN duplicate_object THEN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_enum
+    WHERE enumlabel = 'zoom_guess'
+    AND enumtypid = (SELECT oid FROM pg_type WHERE typname = 'activity_type')
+  ) THEN
+    ALTER TYPE activity_type ADD VALUE 'zoom_guess';
+  END IF;
+END $$;
 
 DO $$ BEGIN
   CREATE TYPE quiz_status AS ENUM ('draft', 'published', 'archived');

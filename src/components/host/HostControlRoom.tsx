@@ -33,8 +33,10 @@ import {
   SPACETOON_NOSTALGIA_QUESTIONS,
   ANIME_EXPERT_EXAM_QUESTIONS,
   SAKURA_FEUD_ROUNDS,
+  ZOOM_GUESS_QUESTIONS,
   type QuizQuestionData,
   type FeudQuestionData,
+  type ZoomGuessQuestionData,
 } from '@/lib/gameData'
 
 interface HostControlRoomProps {
@@ -54,6 +56,7 @@ export default function HostControlRoom({ sessionId, locale = 'en' }: HostContro
 
   // Game data questions
   const [quizQuestions, setQuizQuestions] = useState<QuizQuestionData[]>([])
+  const [zoomQuestions, setZoomQuestions] = useState<ZoomGuessQuestionData[]>(ZOOM_GUESS_QUESTIONS)
   const [feudRounds, setFeudRounds] = useState<FeudQuestionData[]>(SAKURA_FEUD_ROUNDS)
 
   // Feud host state
@@ -96,7 +99,10 @@ export default function HostControlRoom({ sessionId, locale = 'en' }: HostContro
 
         setSession(sess)
 
-        if (sess.activity_type === 'whos_that_character') {
+        const isZoomGame = sess.activity_type === 'zoom_guess' || (sess.settings as any)?.game_mode === 'zoom_guess'
+        if (isZoomGame) {
+          setZoomQuestions(ZOOM_GUESS_QUESTIONS)
+        } else if (sess.activity_type === 'whos_that_character') {
           setQuizQuestions(WHOS_THAT_CHARACTER_QUESTIONS)
         } else if (sess.activity_type === 'spacetoon_nostalgia') {
           setQuizQuestions(SPACETOON_NOSTALGIA_QUESTIONS)
@@ -448,9 +454,11 @@ export default function HostControlRoom({ sessionId, locale = 'en' }: HostContro
   }
 
   const currentIndex = getQuestionIndex(session)
-  const totalQuestions = quizQuestions.length || feudRounds.length || 5
+  const isZoomGame = session.activity_type === 'zoom_guess' || (session.settings as any)?.game_mode === 'zoom_guess'
+  const totalQuestions = (isZoomGame ? zoomQuestions.length : 0) || quizQuestions.length || feudRounds.length || 5
   const currentQuizQ = quizQuestions[currentIndex]
   const currentFeudQ = feudRounds[currentIndex]
+  const currentZoomQ = isZoomGame ? (zoomQuestions[currentIndex] || zoomQuestions[0]) : null
 
   const team1Members = participants.filter(p => participantTeams[p.id] === 'team1' || !participantTeams[p.id])
   const team2Members = participants.filter(p => participantTeams[p.id] === 'team2')
@@ -872,7 +880,7 @@ export default function HostControlRoom({ sessionId, locale = 'en' }: HostContro
           </div>
 
           {/* QUESTION PREVIEW (For Quiz modes) */}
-          {currentQuizQ && (
+          {currentQuizQ && !isZoomGame && (
             <div className="p-5 rounded-2xl bg-black/30 border border-pink-500/15">
               <span className="text-xs uppercase tracking-wider text-pink-300/70 font-bold block mb-2">
                 {isRtl ? 'معاينة السؤال الحالي للمنظم:' : 'Host Question Preview:'}
@@ -894,6 +902,58 @@ export default function HostControlRoom({ sessionId, locale = 'en' }: HostContro
                   </div>
                 ))}
               </div>
+            </div>
+          )}
+
+          {/* ZOOM & GUESS HOST PREVIEW CARD */}
+          {isZoomGame && currentZoomQ && (
+            <div className="p-5 rounded-2xl bg-[#1d0b2e] border-2 border-pink-500/30 space-y-4">
+              <div className="flex items-center justify-between pb-3 border-b border-pink-500/20">
+                <span className="text-xs font-black uppercase text-pink-300 tracking-wider flex items-center gap-1.5">
+                  <span>🔍</span>
+                  <span>{isRtl ? 'معلومات الشخصية المستهدفة (للمنظم)' : 'Target Character Intel (Host Only)'}</span>
+                </span>
+                <span className="text-xs font-mono font-bold text-amber-300">
+                  {currentZoomQ.base_points} PTS MAX
+                </span>
+              </div>
+
+              <div className="flex items-center gap-4">
+                <div className="w-20 h-20 rounded-2xl overflow-hidden border-2 border-pink-400/50 shrink-0 bg-black">
+                  <img
+                    src={currentZoomQ.image_url}
+                    alt="Mystery Character"
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+                <div>
+                  <h4 className="text-xl font-black text-white">
+                    {currentZoomQ.character_name_ar} ({currentZoomQ.character_name})
+                  </h4>
+                  <p className="text-xs text-pink-200/70 mt-0.5 font-bold">
+                    {isRtl ? `أنمي: ${currentZoomQ.anime_origin_ar}` : `Anime: ${currentZoomQ.anime_origin}`}
+                  </p>
+                  <p className="text-[11px] text-pink-300/80 mt-1">
+                    💡 {isRtl ? currentZoomQ.hint_ar : currentZoomQ.hint}
+                  </p>
+                </div>
+              </div>
+
+              <div className="p-2.5 rounded-xl bg-black/40 border border-white/5 text-xs text-pink-200/80">
+                <span className="font-bold text-pink-300">{isRtl ? 'الأسماء والتهجئات المقبولة:' : 'Accepted Aliases:'} </span>
+                <span>{[currentZoomQ.character_name, currentZoomQ.character_name_ar, ...currentZoomQ.aliases].join(' • ')}</span>
+              </div>
+
+              {session.status === 'question_active' && (
+                <button
+                  onClick={() => updateSessionStatus('answer_reveal')}
+                  disabled={actionLoading}
+                  className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-500 hover:to-purple-500 text-white font-black text-sm shadow-lg flex items-center justify-center gap-2"
+                >
+                  <Eye size={16} />
+                  <span>{isRtl ? 'كشف الإجابة والصورة كاملة للجمهور 👁️' : 'Reveal Answer & Full Image 👁️'}</span>
+                </button>
+              )}
             </div>
           )}
         </div>

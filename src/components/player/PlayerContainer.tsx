@@ -9,11 +9,14 @@ import type { GameSession, SessionParticipant } from '@/types/database'
 import PlayerQuizView from './PlayerQuizView'
 import PlayerFeudView from './PlayerFeudView'
 import PlayerDrawView from './PlayerDrawView'
+import PlayerZoomGuessView from './PlayerZoomGuessView'
 import {
   WHOS_THAT_CHARACTER_QUESTIONS,
   SPACETOON_NOSTALGIA_QUESTIONS,
   ANIME_EXPERT_EXAM_QUESTIONS,
+  ZOOM_GUESS_QUESTIONS,
   type QuizQuestionData,
+  type ZoomGuessQuestionData,
 } from '@/lib/gameData'
 import { getParticipantAvatar } from '@/lib/gameHelpers'
 
@@ -32,6 +35,7 @@ export default function PlayerContainer({ sessionId, locale = 'en' }: PlayerCont
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [quizQuestions, setQuizQuestions] = useState<QuizQuestionData[]>([])
+  const [zoomQuestions, setZoomQuestions] = useState<ZoomGuessQuestionData[]>(ZOOM_GUESS_QUESTIONS)
 
   useEffect(() => {
     async function initPlayer() {
@@ -56,7 +60,10 @@ export default function PlayerContainer({ sessionId, locale = 'en' }: PlayerCont
         setSession(sessData)
 
         // Select questions
-        if (sessData.activity_type === 'whos_that_character') {
+        const isZoomGame = sessData.activity_type === 'zoom_guess' || (sessData.settings as any)?.game_mode === 'zoom_guess'
+        if (isZoomGame) {
+          setZoomQuestions(ZOOM_GUESS_QUESTIONS)
+        } else if (sessData.activity_type === 'whos_that_character') {
           setQuizQuestions(WHOS_THAT_CHARACTER_QUESTIONS)
         } else if (sessData.activity_type === 'spacetoon_nostalgia') {
           setQuizQuestions(SPACETOON_NOSTALGIA_QUESTIONS)
@@ -264,10 +271,33 @@ export default function PlayerContainer({ sessionId, locale = 'en' }: PlayerCont
           </div>
         )}
 
+        {/* ZOOM & GUESS MODE */}
+        {(session.activity_type === 'zoom_guess' || (session.settings as any)?.game_mode === 'zoom_guess') &&
+          ['question_active', 'answer_collection_ended', 'answer_reveal', 'round_results'].includes(
+            session.status
+          ) && (
+            <PlayerZoomGuessView
+              session={session}
+              participant={participant}
+              currentQuestion={
+                zoomQuestions[
+                  Math.min(
+                    zoomQuestions.length - 1,
+                    (session.settings as any)?.question_index || 0
+                  )
+                ] || zoomQuestions[0]
+              }
+              questionIndex={(session.settings as any)?.question_index || 0}
+              totalQuestions={zoomQuestions.length}
+              locale={locale}
+            />
+          )}
+
         {/* QUIZ ANIME MODES */}
         {['whos_that_character', 'spacetoon_nostalgia', 'anime_expert_exam'].includes(
           session.activity_type
         ) &&
+          !((session.settings as any)?.game_mode === 'zoom_guess') &&
           ['question_active', 'answer_collection_ended', 'answer_reveal', 'round_results'].includes(
             session.status
           ) && (
