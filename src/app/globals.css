@@ -1,26 +1,948 @@
 @import "tailwindcss";
+@source "../**/*.{js,ts,jsx,tsx,mdx}";
+
+/* ============================================================
+   SAKURA DESIGN SYSTEM — GLOBAL STYLES
+   ============================================================ */
+
+/* ============================================================
+   CSS CUSTOM PROPERTIES (Design Tokens)
+   ============================================================ */
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Sakura Color Palette */
+  --sakura-pink: #F4A7C5;
+  --deep-sakura: #E56A9F;
+  --cherry-blossom-pale: rgba(244, 167, 197, 0.15);
+  --soft-rose: #F8D4E3;
+  --midnight-plum: #180C22;
+  --dark-plum-surface: #241433;
+  --muted-lavender: #D2C0E2;
+  --warm-paper: #221230;
+  --pure-white: #FFFFFF;
+  --primary-text: #FFFFFF;
+  --muted-text: #C4B5CE;
+  --success: #34D399;
+  --error: #F87171;
+  --warning: #FBBF24;
+
+  /* Derived / Alpha */
+  --sakura-pink-10: rgba(244, 167, 197, 0.1);
+  --sakura-pink-20: rgba(244, 167, 197, 0.2);
+  --sakura-pink-40: rgba(244, 167, 197, 0.4);
+  --midnight-plum-80: rgba(24, 12, 34, 0.8);
+  --dark-plum-60: rgba(36, 20, 51, 0.6);
+
+  /* Typography Scale */
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-arabic: 'Noto Sans Arabic', 'Inter', sans-serif;
+  --font-japanese: 'Noto Sans JP', 'Inter', sans-serif;
+  --font-display: 'DM Serif Display', Georgia, serif;
+
+  /* Spacing */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 32px;
+  --space-2xl: 48px;
+  --space-3xl: 64px;
+
+  /* Border radius */
+  --radius-sm: 6px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+  --radius-full: 9999px;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.2);
+  --shadow-md: 0 4px 14px rgba(0, 0, 0, 0.35);
+  --shadow-lg: 0 10px 30px rgba(0, 0, 0, 0.5);
+  --shadow-sakura: 0 4px 20px rgba(229, 106, 159, 0.35);
+  --shadow-glow: 0 0 30px rgba(244, 167, 197, 0.35);
+
+  /* Transitions */
+  --transition-fast: 150ms ease;
+  --transition-base: 250ms ease;
+  --transition-slow: 400ms ease;
+
+  /* Z-Index Scale */
+  --z-base: 0;
+  --z-raised: 10;
+  --z-dropdown: 100;
+  --z-sticky: 200;
+  --z-modal: 300;
+  --z-toast: 400;
+  --z-overlay: 500;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+/* ============================================================
+   BASE RESET & TYPOGRAPHY
+   ============================================================ */
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html {
+  font-size: 16px;
+  -webkit-text-size-adjust: 100%;
+  scroll-behavior: smooth;
+  background-color: var(--midnight-plum);
+  color: #FFFFFF;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans);
+  font-size: 1rem;
+  line-height: 1.6;
+  color: #FFFFFF;
+  background-color: var(--midnight-plum);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
+  min-height: 100vh;
+}
+
+.container-sakura {
+  width: 100%;
+  max-width: 1200px;
+  margin-left: auto;
+  margin-right: auto;
+  padding-left: 1.5rem;
+  padding-right: 1.5rem;
+}
+
+.section {
+  padding-top: 5rem;
+  padding-bottom: 5rem;
+  position: relative;
+  width: 100%;
+}
+
+@media (min-width: 768px) {
+  .section {
+    padding-top: 6.5rem;
+    padding-bottom: 6.5rem;
+  }
+}
+
+/* Arabic/RTL body */
+body[dir="rtl"],
+[dir="rtl"] {
+  font-family: var(--font-arabic);
+}
+
+/* Japanese characters */
+:lang(ja) {
+  font-family: var(--font-japanese);
+}
+
+h1, h2, h3, h4, h5, h6 {
+  line-height: 1.2;
+  font-weight: 700;
+  color: #FFFFFF;
+}
+
+h1 { font-size: clamp(2rem, 5vw, 3.5rem); }
+h2 { font-size: clamp(1.5rem, 3.5vw, 2.5rem); }
+h3 { font-size: clamp(1.25rem, 2.5vw, 1.75rem); }
+h4 { font-size: 1.25rem; }
+h5 { font-size: 1.125rem; }
+h6 { font-size: 1rem; }
+
+.display-heading {
+  font-family: var(--font-display);
+  font-weight: 400;
+  letter-spacing: -0.02em;
+}
+
+p {
+  color: #E2D9E8;
+  line-height: 1.7;
+}
+
+a {
+  color: var(--deep-sakura);
+  text-decoration: none;
+  transition: color var(--transition-fast);
+}
+
+a:hover { color: var(--sakura-pink); }
+
+img, video {
+  max-width: 100%;
+  display: block;
+}
+
+button {
+  cursor: pointer;
+  font-family: inherit;
+}
+
+input, textarea, select {
+  font-family: inherit;
+}
+
+/* ============================================================
+   FOCUS STATES (Accessibility)
+   ============================================================ */
+
+:focus-visible {
+  outline: 2px solid var(--deep-sakura);
+  outline-offset: 3px;
+  border-radius: var(--radius-sm);
+}
+
+/* ============================================================
+   DARK GAME SCREENS
+   ============================================================ */
+
+.game-screen {
+  background-color: var(--midnight-plum);
+  color: var(--pure-white);
+  min-height: 100dvh;
+}
+
+.game-screen h1,
+.game-screen h2,
+.game-screen h3,
+.game-screen h4 {
+  color: var(--pure-white);
+}
+
+.game-screen p {
+  color: var(--muted-lavender);
+}
+
+/* ============================================================
+   SAKURA BACKGROUND PATTERN
+   ============================================================ */
+
+.sakura-bg {
+  position: relative;
+  overflow: hidden;
+}
+
+.sakura-bg::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: 
+    radial-gradient(circle at 20% 20%, rgba(244, 167, 197, 0.08) 0%, transparent 50%),
+    radial-gradient(circle at 80% 80%, rgba(217, 108, 157, 0.06) 0%, transparent 50%),
+    radial-gradient(circle at 50% 10%, rgba(185, 161, 200, 0.05) 0%, transparent 40%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.sakura-bg > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* Game dark variant */
+.sakura-bg-dark {
+  background: linear-gradient(135deg, #24152F 0%, #33213E 50%, #1E0F2A 100%);
+  position: relative;
+}
+
+.sakura-bg-dark::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image:
+    radial-gradient(circle at 15% 15%, rgba(244, 167, 197, 0.12) 0%, transparent 45%),
+    radial-gradient(circle at 85% 85%, rgba(217, 108, 157, 0.08) 0%, transparent 40%);
+  pointer-events: none;
+}
+
+/* ============================================================
+   SAKURA CARD VARIANTS
+   ============================================================ */
+
+.card {
+  background: rgba(36, 21, 47, 0.7);
+  backdrop-filter: blur(12px);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  padding: var(--space-lg);
+  border: 1px solid rgba(244, 167, 197, 0.18);
+  color: #FFFFFF;
+  transition: all var(--transition-base);
+}
+
+.card:hover {
+  border-color: rgba(244, 167, 197, 0.35);
+  box-shadow: 0 12px 40px rgba(217, 108, 157, 0.15);
+}
+
+.card-dark {
+  background: var(--dark-plum-surface);
+  border-radius: var(--radius-lg);
+  border: 1px solid rgba(244, 167, 197, 0.15);
+  padding: var(--space-lg);
+  color: #FFFFFF;
+}
+
+.card-pale {
+  background: rgba(244, 167, 197, 0.08);
+  border-radius: var(--radius-lg);
+  padding: var(--space-lg);
+  border: 1px solid rgba(217, 108, 157, 0.25);
+  color: #FFFFFF;
+}
+
+.text-gradient-sakura {
+  background: linear-gradient(135deg, #F4A7C5 0%, #D96C9D 50%, #F8D4E3 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  display: inline-block;
+}
+
+.sakura-bg-warm {
+  background-color: #1a0c24;
+  color: #FFFFFF;
+}
+
+/* ============================================================
+   BUTTON SYSTEM
+   ============================================================ */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-sm);
+  padding: 12px 24px;
+  border-radius: var(--radius-md);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  line-height: 1;
+  border: none;
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+  user-select: none;
+  position: relative;
+  overflow: hidden;
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, var(--deep-sakura) 0%, var(--sakura-pink) 100%);
+  color: var(--pure-white);
+  box-shadow: 0 4px 12px rgba(217, 108, 157, 0.35);
+}
+
+.btn-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(217, 108, 157, 0.45);
+}
+
+.btn-primary:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 8px rgba(217, 108, 157, 0.3);
+}
+
+.btn-secondary {
+  background: rgba(244, 167, 197, 0.08);
+  color: var(--sakura-pink);
+  border: 1.5px solid rgba(244, 167, 197, 0.4);
+}
+
+.btn-secondary:hover {
+  background: rgba(244, 167, 197, 0.2);
+  color: #FFFFFF;
+  border-color: var(--sakura-pink);
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--primary-text);
+}
+
+.btn-ghost:hover {
+  background: rgba(244, 167, 197, 0.1);
+  color: var(--deep-sakura);
+}
+
+.btn-dark {
+  background: var(--dark-plum-surface);
+  color: var(--pure-white);
+  border: 1px solid rgba(244, 167, 197, 0.2);
+}
+
+.btn-dark:hover {
+  background: rgba(244, 167, 197, 0.1);
+  border-color: var(--sakura-pink);
+}
+
+.btn-success {
+  background: var(--success);
+  color: var(--pure-white);
+}
+
+.btn-danger {
+  background: var(--error);
+  color: var(--pure-white);
+}
+
+/* Size modifiers */
+.btn-sm {
+  padding: 8px 16px;
+  font-size: 0.875rem;
+}
+
+.btn-lg {
+  padding: 16px 32px;
+  font-size: 1.0625rem;
+}
+
+.btn-xl {
+  padding: 20px 40px;
+  font-size: 1.125rem;
+  border-radius: var(--radius-xl);
+}
+
+/* ============================================================
+   FORM ELEMENTS
+   ============================================================ */
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.form-label {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--primary-text);
+}
+
+.form-input {
+  width: 100%;
+  padding: 12px 16px;
+  border: 1.5px solid rgba(244, 167, 197, 0.3);
+  border-radius: var(--radius-md);
+  background: var(--pure-white);
+  color: var(--primary-text);
+  font-size: 1rem;
+  font-family: inherit;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+  outline: none;
+}
+
+.form-input:focus {
+  border-color: var(--deep-sakura);
+  box-shadow: 0 0 0 3px rgba(217, 108, 157, 0.15);
+}
+
+.form-input::placeholder {
+  color: var(--muted-text);
+}
+
+.form-input-dark {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(244, 167, 197, 0.2);
+  color: var(--pure-white);
+}
+
+.form-input-dark:focus {
+  border-color: var(--sakura-pink);
+  box-shadow: 0 0 0 3px rgba(244, 167, 197, 0.15);
+}
+
+.form-input-dark::placeholder {
+  color: var(--muted-lavender);
+}
+
+.form-error {
+  font-size: 0.8125rem;
+  color: var(--error);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* ============================================================
+   BADGE / PILL
+   ============================================================ */
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border-radius: var(--radius-full);
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.badge-pink {
+  background: var(--cherry-blossom-pale);
+  color: var(--deep-sakura);
+}
+
+.badge-plum {
+  background: var(--dark-plum-surface);
+  color: var(--muted-lavender);
+}
+
+.badge-success {
+  background: rgba(67, 138, 104, 0.15);
+  color: var(--success);
+}
+
+.badge-error {
+  background: rgba(201, 76, 100, 0.15);
+  color: var(--error);
+}
+
+.badge-warning {
+  background: rgba(213, 154, 69, 0.15);
+  color: var(--warning);
+}
+
+/* ============================================================
+   ANSWER OPTION BUTTONS (Game)
+   ============================================================ */
+
+.answer-option {
+  width: 100%;
+  padding: 16px 20px;
+  border-radius: var(--radius-md);
+  border: 2px solid rgba(244, 167, 197, 0.3);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--pure-white);
+  font-size: 1rem;
+  font-weight: 500;
+  text-align: left;
+  transition: all var(--transition-fast);
+  cursor: pointer;
+  min-height: 60px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+[dir="rtl"] .answer-option {
+  text-align: right;
+}
+
+.answer-option:hover {
+  border-color: var(--sakura-pink);
+  background: rgba(244, 167, 197, 0.1);
+  transform: translateY(-1px);
+}
+
+.answer-option.selected {
+  border-color: var(--sakura-pink);
+  background: rgba(244, 167, 197, 0.2);
+}
+
+.answer-option.correct {
+  border-color: var(--success);
+  background: rgba(67, 138, 104, 0.2);
+}
+
+.answer-option.incorrect {
+  border-color: var(--error);
+  background: rgba(201, 76, 100, 0.2);
+  opacity: 0.7;
+}
+
+.answer-option.disabled {
+  pointer-events: none;
+  opacity: 0.6;
+}
+
+/* Answer option color variants for game modes */
+.answer-option-a { --option-color: #E85B8A; }
+.answer-option-b { --option-color: #5B8AE8; }
+.answer-option-c { --option-color: #E8A85B; }
+.answer-option-d { --option-color: #5BE88A; }
+
+/* ============================================================
+   COUNTDOWN TIMER
+   ============================================================ */
+
+.countdown-ring {
+  transform: rotate(-90deg);
+}
+
+.countdown-ring circle {
+  transition: stroke-dashoffset 1s linear;
+  stroke-linecap: round;
+}
+
+/* ============================================================
+   LEADERBOARD
+   ============================================================ */
+
+.leaderboard-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(244, 167, 197, 0.1);
+  transition: all var(--transition-fast);
+}
+
+.leaderboard-item:nth-child(1) {
+  background: rgba(213, 154, 69, 0.15);
+  border-color: rgba(213, 154, 69, 0.3);
+}
+
+.leaderboard-item:nth-child(2) {
+  background: rgba(185, 161, 200, 0.12);
+  border-color: rgba(185, 161, 200, 0.25);
+}
+
+.leaderboard-item:nth-child(3) {
+  background: rgba(201, 76, 100, 0.1);
+  border-color: rgba(201, 76, 100, 0.2);
+}
+
+/* ============================================================
+   PASSPORT STYLES
+   ============================================================ */
+
+.passport-cover {
+  background: linear-gradient(135deg, #33213E 0%, #24152F 100%);
+  border-radius: var(--radius-xl);
+  position: relative;
+  overflow: hidden;
+}
+
+.passport-cover::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: 
+    url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M30 5 C32 10 35 12 30 15 C25 12 28 10 30 5Z M30 15 C32 20 28 22 30 27 C32 22 28 20 30 15Z' fill='rgba(244,167,197,0.03)'/%3E%3C/svg%3E");
+  opacity: 0.5;
+}
+
+.stamp-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+  gap: 16px;
+}
+
+.stamp-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+  border-radius: var(--radius-md);
+  text-align: center;
+  transition: transform var(--transition-fast);
+}
+
+.stamp-item:hover {
+  transform: scale(1.05);
+}
+
+.stamp-icon {
+  width: 64px;
+  height: 64px;
+  border-radius: var(--radius-full);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2rem;
+  position: relative;
+}
+
+.stamp-icon.locked {
+  filter: grayscale(1);
+  opacity: 0.4;
+}
+
+.stamp-icon.earned {
+  box-shadow: 0 0 20px rgba(244, 167, 197, 0.4);
+}
+
+.stamp-rarity-common { background: rgba(185, 161, 200, 0.15); }
+.stamp-rarity-uncommon { background: rgba(67, 138, 104, 0.15); }
+.stamp-rarity-rare { background: rgba(91, 138, 232, 0.15); }
+.stamp-rarity-legendary { background: rgba(213, 154, 69, 0.2); }
+
+/* ============================================================
+   PIN INPUT
+   ============================================================ */
+
+.pin-input-container {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+}
+
+.pin-digit {
+  width: 52px;
+  height: 64px;
+  border-radius: var(--radius-md);
+  border: 2px solid rgba(244, 167, 197, 0.3);
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--pure-white);
+  font-size: 1.75rem;
+  font-weight: 700;
+  text-align: center;
+  outline: none;
+  transition: border-color var(--transition-fast);
+}
+
+.pin-digit:focus {
+  border-color: var(--sakura-pink);
+  box-shadow: 0 0 0 3px rgba(244, 167, 197, 0.2);
+}
+
+/* ============================================================
+   FEUD BOARD
+   ============================================================ */
+
+.feud-board {
+  display: grid;
+  gap: 8px;
+}
+
+.feud-answer-slot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+  border-radius: var(--radius-md);
+  border: 2px solid rgba(244, 167, 197, 0.2);
+  background: rgba(255, 255, 255, 0.04);
+  min-height: 56px;
+  transition: all var(--transition-base);
+}
+
+.feud-answer-slot.revealed {
+  background: rgba(67, 138, 104, 0.2);
+  border-color: var(--success);
+}
+
+.feud-answer-slot.hidden {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+/* ============================================================
+   CHERRY BLOSSOM PETAL ANIMATION
+   ============================================================ */
+
+@keyframes petalFall {
+  0% {
+    transform: translateY(-20px) rotate(0deg);
+    opacity: 0;
+  }
+  10% {
+    opacity: 0.7;
+  }
+  90% {
+    opacity: 0.5;
+  }
+  100% {
+    transform: translateY(100vh) rotate(720deg);
+    opacity: 0;
+  }
+}
+
+@keyframes petalSway {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(20px); }
+  75% { transform: translateX(-20px); }
+}
+
+.petal {
+  position: fixed;
+  pointer-events: none;
+  z-index: 0;
+  animation: petalFall linear infinite, petalSway ease-in-out infinite;
+  font-size: 1.5rem;
+  user-select: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .petal {
+    display: none;
+  }
+  
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ============================================================
+   ANIMATIONS
+   ============================================================ */
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fadeInScale {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes slideInLeft {
+  from { opacity: 0; transform: translateX(-20px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes slideInRight {
+  from { opacity: 0; transform: translateX(20px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes pulse-sakura {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(244, 167, 197, 0); }
+  50% { box-shadow: 0 0 0 8px rgba(244, 167, 197, 0.2); }
+}
+
+@keyframes stamp-reveal {
+  0% { transform: scale(2) rotate(-15deg); opacity: 0; }
+  60% { transform: scale(0.9) rotate(3deg); opacity: 1; }
+  80% { transform: scale(1.05) rotate(-1deg); }
+  100% { transform: scale(1) rotate(0); }
+}
+
+@keyframes correct-bounce {
+  0% { transform: scale(1); }
+  30% { transform: scale(1.15); }
+  60% { transform: scale(0.95); }
+  80% { transform: scale(1.05); }
+  100% { transform: scale(1); }
+}
+
+.animate-fade-in { animation: fadeIn var(--transition-base) ease forwards; }
+.animate-fade-in-scale { animation: fadeInScale var(--transition-base) ease forwards; }
+.animate-slide-in-left { animation: slideInLeft var(--transition-base) ease forwards; }
+.animate-slide-in-right { animation: slideInRight var(--transition-base) ease forwards; }
+.animate-stamp-reveal { animation: stamp-reveal 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
+.animate-correct { animation: correct-bounce 0.5s ease forwards; }
+.animate-pulse-sakura { animation: pulse-sakura 2s ease-in-out infinite; }
+
+/* Staggered children */
+.stagger-children > *:nth-child(1) { animation-delay: 0ms; }
+.stagger-children > *:nth-child(2) { animation-delay: 75ms; }
+.stagger-children > *:nth-child(3) { animation-delay: 150ms; }
+.stagger-children > *:nth-child(4) { animation-delay: 225ms; }
+.stagger-children > *:nth-child(5) { animation-delay: 300ms; }
+.stagger-children > *:nth-child(6) { animation-delay: 375ms; }
+
+/* ============================================================
+   SCROLLBAR STYLING
+   ============================================================ */
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(244, 167, 197, 0.3);
+  border-radius: var(--radius-full);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(217, 108, 157, 0.5);
+}
+
+/* ============================================================
+   LAYOUT UTILITIES
+   ============================================================ */
+
+.container-sakura {
+  width: 100%;
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 0 var(--space-lg);
+}
+
+@media (max-width: 768px) {
+  .container-sakura {
+    padding: 0 var(--space-md);
+  }
+}
+
+.section {
+  padding: var(--space-3xl) 0;
+}
+
+.section-sm {
+  padding: var(--space-2xl) 0;
+}
+
+/* ============================================================
+   TEXT UTILITIES
+   ============================================================ */
+
+.text-gradient-sakura {
+  background: linear-gradient(135deg, var(--deep-sakura) 0%, var(--sakura-pink) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.text-gradient-light {
+  background: linear-gradient(135deg, var(--pure-white) 0%, var(--muted-lavender) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ============================================================
+   PROJECTOR MODE (large display optimizations)
+   ============================================================ */
+
+.projector-mode {
+  font-size: 1.25rem;
+}
+
+.projector-mode h1 { font-size: clamp(3rem, 6vw, 5rem); }
+.projector-mode h2 { font-size: clamp(2rem, 4vw, 3.5rem); }
+.projector-mode h3 { font-size: clamp(1.5rem, 3vw, 2.5rem); }
+.projector-mode .answer-option { min-height: 80px; font-size: 1.25rem; }
+.projector-mode .pin-digit { width: 70px; height: 90px; font-size: 2.5rem; }
+
+/* ============================================================
+   MOBILE OPTIMIZATIONS
+   ============================================================ */
+
+@media (max-width: 480px) {
+  .answer-option { min-height: 52px; padding: 12px 16px; }
+  .btn { padding: 12px 20px; }
+  .btn-xl { padding: 16px 28px; font-size: 1rem; }
+}
+
+/* Safe area for notched phones */
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.safe-top {
+  padding-top: env(safe-area-inset-top);
 }
