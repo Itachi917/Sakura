@@ -193,7 +193,7 @@ export default function PlayerContainer({ sessionId, locale = 'en' }: PlayerCont
   }
 
   return (
-    <div className="min-h-screen bg-[var(--midnight-plum)] text-white flex flex-col justify-between p-4 sm:p-6 relative select-none">
+    <div className="min-h-screen text-white flex flex-col justify-between p-4 sm:p-6 relative select-none">
       {/* Background ambient lighting */}
       <div
         aria-hidden="true"

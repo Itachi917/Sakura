@@ -231,7 +231,7 @@ export default function HostControlRoom({ sessionId, locale = 'en' }: HostContro
   const currentFeudQ = feudRounds[currentIndex]
 
   return (
-    <div className="min-h-screen bg-[#140a1b] text-white flex flex-col font-sans select-none">
+    <div className="min-h-screen text-white flex flex-col font-sans select-none">
       {/* TOP HEADER */}
       <header className="px-6 py-4 bg-[#1f102a] border-b border-pink-500/20 flex items-center justify-between">
         <div className="flex items-center gap-4">

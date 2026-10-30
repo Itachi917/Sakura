@@ -224,7 +224,7 @@ export default function ProjectorContainer({ sessionId, locale = 'en' }: Project
   }
 
   return (
-    <div className="relative min-h-screen w-full bg-[#180C22] text-white flex flex-col justify-between overflow-hidden select-none font-sans">
+    <div className="relative min-h-screen w-full text-white flex flex-col justify-between overflow-hidden select-none font-sans">
       {/* Background ambient lighting */}
       <div
         aria-hidden="true"

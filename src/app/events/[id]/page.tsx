@@ -49,7 +49,7 @@ export default async function EventDetailPage({
   }
 
   return (
-    <div className="min-h-screen bg-[var(--midnight-plum)] text-white flex flex-col justify-between">
+    <div className="min-h-screen text-white flex flex-col justify-between">
       <Navbar locale={locale} />
 
       <main className="flex-1 pt-28 pb-16 px-4 sm:px-6 max-w-4xl mx-auto w-full">

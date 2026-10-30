@@ -21,7 +21,7 @@ export default async function JoinPage({
   const initialPin = params?.pin || ''
 
   return (
-    <div className="min-h-screen bg-[var(--midnight-plum)] text-white flex flex-col justify-between p-4 sm:p-6 relative overflow-hidden">
+    <div className="min-h-screen text-white flex flex-col justify-between p-4 sm:p-6 relative overflow-hidden">
       {/* Background glow effects */}
       <div
         aria-hidden="true"

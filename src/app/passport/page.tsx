@@ -14,7 +14,7 @@ export default async function PassportPage() {
   const locale = cookieStore.get('locale')?.value === 'ar' ? 'ar' : 'en'
 
   return (
-    <div className="min-h-screen bg-[var(--midnight-plum)] text-white flex flex-col justify-between">
+    <div className="min-h-screen text-white flex flex-col justify-between">
       <Navbar locale={locale} />
       <main className="flex-1 w-full max-w-5xl self-center px-4 sm:px-6 pb-16" style={{ paddingTop: '7rem' }}>
         <PassportBooklet locale={locale} />

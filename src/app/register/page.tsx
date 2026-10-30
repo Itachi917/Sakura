@@ -15,11 +15,13 @@ export default async function RegisterPage() {
   const isRtl = locale === 'ar'
 
   return (
-    <div className="min-h-screen sakura-bg-dark flex items-center justify-center p-4 py-12">
+    <div className="min-h-screen flex items-center justify-center p-4 py-12 relative z-10">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <Link href="/" className="inline-flex items-center gap-2 mb-6" aria-label="Go to home">
-            <Cherry size={32} className="text-[var(--sakura-pink)]" aria-hidden="true" />
+          <Link href="/" className="inline-flex items-center gap-2.5 mb-6 group" aria-label="Go to home">
+            <div className="w-10 h-10 rounded-full overflow-hidden border border-pink-400/50 shadow-md">
+              <img src="/logo.png" alt="Sakura" className="w-full h-full object-cover group-hover:scale-110 transition-transform" />
+            </div>
             <span className="font-bold text-2xl text-white">さくら</span>
           </Link>
           <h1 className="text-white text-2xl font-bold mb-2">

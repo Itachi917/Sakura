@@ -19,7 +19,7 @@ export default async function PublicPassportPage({
   const locale = cookieStore.get('locale')?.value === 'ar' ? 'ar' : 'en'
 
   return (
-    <div className="min-h-screen bg-[var(--midnight-plum)] text-white flex flex-col justify-between">
+    <div className="min-h-screen text-white flex flex-col justify-between">
       <Navbar locale={locale} />
       <main className="flex-1 py-10 px-4 sm:px-6 max-w-5xl mx-auto w-full">
         <PassportBooklet targetUserId={id} locale={locale} />

@@ -101,6 +101,14 @@ body {
   line-height: 1.6;
   color: #FFFFFF;
   background-color: var(--midnight-plum);
+  background-image:
+    radial-gradient(circle at 10% 12%, rgba(244, 167, 197, 0.14) 0%, transparent 45%),
+    radial-gradient(circle at 90% 18%, rgba(229, 106, 159, 0.12) 0%, transparent 45%),
+    radial-gradient(circle at 50% 50%, rgba(244, 167, 197, 0.08) 0%, transparent 55%),
+    radial-gradient(circle at 80% 85%, rgba(217, 108, 157, 0.08) 0%, transparent 40%),
+    url("data:image/svg+xml,%3Csvg width='120' height='120' viewBox='0 0 120 120' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%23F4A7C5' fill-opacity='0.04'%3E%3Cpath d='M60 46c2-8 8-12 12-10s2 10-2 15c-3 4-8 5-10-5zm-5 13c-7-3-11-9-9-13s9-2 14 3c4 3 4 8-5 10zm-3 15c-4 7-10 10-13 8s-1-9 4-14c4-3 9-3 9 6zm14 7c3 7 2 13-2 14s-9-4-10-10c0-5 4-8 12-4zm15-5c7 2 11 8 9 12s-9 2-14-3c-4-4-3-8 5-9z'/%3E%3Ccircle cx='60' cy='60' r='3' fill='%23E56A9F' fill-opacity='0.08'/%3E%3C/g%3E%3C/svg%3E");
+  background-attachment: fixed;
+  background-size: auto, auto, auto, auto, 120px 120px;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   overflow-x: hidden;
