@@ -432,7 +432,8 @@ export default function PlayerContainer({ sessionId, locale = 'en' }: PlayerCont
           )}
 
         {/* DRAW IT GUESS IT MODE */}
-        {session.activity_type === 'draw_it_guess_it' &&
+        {(session.activity_type === 'draw_it_guess_it' ||
+          (session.settings as any)?.game_mode === 'draw_it_guess_it') &&
           ['question_active', 'answer_collection_ended', 'answer_reveal', 'round_results'].includes(
             session.status
           ) && (

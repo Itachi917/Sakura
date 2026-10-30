@@ -44,6 +44,7 @@ export interface DrawingWordData {
   category: string
   category_ar: string
   difficulty: 'easy' | 'medium' | 'hard'
+  aliases?: string[]
 }
 
 // ------------------------------------------------------------
@@ -344,16 +345,126 @@ export const SAKURA_FEUD_ROUNDS: FeudQuestionData[] = [
 // 5. "DRAW IT, GUESS IT"
 // ------------------------------------------------------------
 export const DRAWING_WORDS: DrawingWordData[] = [
-  { word: 'Kunai', word_ar: 'كوناي', category: 'Ninja Weapon', category_ar: 'سلاح نينجا', difficulty: 'easy' },
-  { word: 'Straw Hat', word_ar: 'قبعة القش', category: 'Clothing', category_ar: 'ملابس وأزياء', difficulty: 'easy' },
-  { word: 'Ramen Bowl', word_ar: 'وعاء رامن', category: 'Food', category_ar: 'طعام ياباني', difficulty: 'easy' },
-  { word: 'Sharingan', word_ar: 'شارينغان', category: 'Anime Power', category_ar: 'قوة أنمي', difficulty: 'medium' },
-  { word: 'Death Note', word_ar: 'مذكرة الموت', category: 'Object', category_ar: 'أداة', difficulty: 'medium' },
-  { word: 'Katana Sword', word_ar: 'سيف كاتانا', category: 'Weapon', category_ar: 'سلاح ساموراي', difficulty: 'easy' },
-  { word: 'Dragon Ball', word_ar: 'كرة التنين', category: 'Artifact', category_ar: 'أداة سحرية', difficulty: 'medium' },
-  { word: 'Sakura Petal', word_ar: 'بتلة ساكورا', category: 'Nature', category_ar: 'طبيعة وثقافة', difficulty: 'easy' },
-  { word: 'Catbus', word_ar: 'حافلة القط', category: 'Ghibli Creature', category_ar: 'مخلوق غيبلي', difficulty: 'hard' },
-  { word: 'Giant Titan', word_ar: 'عملاق ضخم', category: 'Creature', category_ar: 'مخلوق ضخم', difficulty: 'medium' },
+  {
+    word: 'Kunai',
+    word_ar: 'كوناي',
+    category: 'Ninja Weapon',
+    category_ar: 'سلاح نينجا',
+    difficulty: 'easy',
+    aliases: ['كوناي', 'سلاح نينجا', 'خنجر', 'خنجر نينجا', 'kunai', 'dagger'],
+  },
+  {
+    word: 'Straw Hat',
+    word_ar: 'قبعة القش',
+    category: 'Clothing',
+    category_ar: 'ملابس وأزياء',
+    difficulty: 'easy',
+    aliases: ['قبعة القش', 'قبعة لوفي', 'قبعة', 'straw hat', 'luffy hat'],
+  },
+  {
+    word: 'Ramen Bowl',
+    word_ar: 'وعاء رامن',
+    category: 'Food',
+    category_ar: 'طعام ياباني',
+    difficulty: 'easy',
+    aliases: ['رامن', 'وعاء رامن', 'نودلز', 'حساء رامن', 'ramen', 'ramen bowl', 'noodles'],
+  },
+  {
+    word: 'Sharingan',
+    word_ar: 'شارينغان',
+    category: 'Anime Power',
+    category_ar: 'قوة أنمي',
+    difficulty: 'medium',
+    aliases: ['شارينغان', 'شارينجان', 'عين الشارينغان', 'عين ساسكي', 'sharingan'],
+  },
+  {
+    word: 'Death Note',
+    word_ar: 'مذكرة الموت',
+    category: 'Object',
+    category_ar: 'أداة',
+    difficulty: 'medium',
+    aliases: ['مذكرة الموت', 'دفتر الموت', 'كتاب الموت', 'death note'],
+  },
+  {
+    word: 'Katana Sword',
+    word_ar: 'سيف كاتانا',
+    category: 'Weapon',
+    category_ar: 'سلاح ساموراي',
+    difficulty: 'easy',
+    aliases: ['سيف كاتانا', 'كاتانا', 'سيف ساموراي', 'سيف', 'katana', 'sword'],
+  },
+  {
+    word: 'Dragon Ball',
+    word_ar: 'كرة التنين',
+    category: 'Artifact',
+    category_ar: 'أداة سحرية',
+    difficulty: 'medium',
+    aliases: ['كرة التنين', 'دراغون بول', 'دراغونبول', 'كرات التنين', 'dragon ball', 'dragonball'],
+  },
+  {
+    word: 'Sakura Petal',
+    word_ar: 'بتلة ساكورا',
+    category: 'Nature',
+    category_ar: 'طبيعة وثقافة',
+    difficulty: 'easy',
+    aliases: ['بتلة ساكورا', 'ساكورا', 'زهرة الكرز', 'وردة', 'sakura', 'cherry blossom', 'petal'],
+  },
+  {
+    word: 'Catbus',
+    word_ar: 'حافلة القط',
+    category: 'Ghibli Creature',
+    category_ar: 'مخلوق غيبلي',
+    difficulty: 'hard',
+    aliases: ['حافلة القط', 'باص القط', 'توتورو باص', 'قط باص', 'catbus', 'cat bus'],
+  },
+  {
+    word: 'Giant Titan',
+    word_ar: 'عملاق ضخم',
+    category: 'Creature',
+    category_ar: 'مخلوق ضخم',
+    difficulty: 'medium',
+    aliases: ['عملاق', 'عملاق ضخم', 'تايتن', 'titan', 'giant titan'],
+  },
+  {
+    word: 'Pikachu',
+    word_ar: 'بيكاتشو',
+    category: 'Creature',
+    category_ar: 'بوكيمون',
+    difficulty: 'easy',
+    aliases: ['بيكاتشو', 'بوكيمون', 'pikachu'],
+  },
+  {
+    word: 'Pokeball',
+    word_ar: 'كرة بوكيمون',
+    category: 'Artifact',
+    category_ar: 'أداة بوكيمون',
+    difficulty: 'easy',
+    aliases: ['كرة بوكيمون', 'بوكيبول', 'بوكيبول كروية', 'pokeball', 'poke ball'],
+  },
+  {
+    word: 'Ninja Headband',
+    word_ar: 'عصابة رأس نينجا',
+    category: 'Accessory',
+    category_ar: 'إكسسوار نينجا',
+    difficulty: 'medium',
+    aliases: ['عصابة راس', 'عصابة رأس نينجا', 'حامية جبين', 'شعار كونوها', 'headband', 'ninja headband'],
+  },
+  {
+    word: 'Shuriken',
+    word_ar: 'شوريكين',
+    category: 'Ninja Weapon',
+    category_ar: 'سلاح نينجا',
+    difficulty: 'easy',
+    aliases: ['شوريكين', 'نجمة نينجا', 'نجمة', 'shuriken', 'ninja star'],
+  },
+  {
+    word: 'Pirate Ship',
+    word_ar: 'سفينة قراصنة',
+    category: 'Vehicle',
+    category_ar: 'مركبة وقوارب',
+    difficulty: 'medium',
+    aliases: ['سفينة قراصنة', 'سفينة', 'مركب قراصنة', 'ميري', 'قارب', 'pirate ship', 'ship'],
+  },
 ]
 
 // ------------------------------------------------------------

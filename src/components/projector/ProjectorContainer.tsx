@@ -17,7 +17,7 @@ import {
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { sound } from '@/lib/sound'
-import { getQuestionIndex } from '@/lib/gameHelpers'
+import { getQuestionIndex, prepareDrawItRound } from '@/lib/gameHelpers'
 import { cn } from '@/lib/utils'
 import type { GameSession, SessionParticipant } from '@/types/database'
 import ProjectorLobby from './ProjectorLobby'
@@ -32,6 +32,7 @@ import {
   ANIME_EXPERT_EXAM_QUESTIONS,
   SAKURA_FEUD_ROUNDS,
   ZOOM_GUESS_QUESTIONS,
+  DRAWING_WORDS,
   type QuizQuestionData,
   type FeudQuestionData,
   type ZoomGuessQuestionData,
@@ -112,7 +113,14 @@ export default function ProjectorContainer({ sessionId, locale = 'en' }: Project
 
   const isZoom = session?.activity_type === 'zoom_guess' || (session?.settings as any)?.game_mode === 'zoom_guess'
   const isFeud = session?.activity_type === 'sakura_feud'
-  const totalQuestions = isZoom ? zoomQuestions.length : isFeud ? feudRounds.length : quizQuestions.length || 5
+  const isDrawIt = session?.activity_type === 'draw_it_guess_it'
+  const totalQuestions = isZoom
+    ? zoomQuestions.length
+    : isFeud
+    ? feudRounds.length
+    : isDrawIt
+    ? Math.min(15, Math.max(DRAWING_WORDS.length, participants.length || 5))
+    : quizQuestions.length || 5
   const currentIdx = getQuestionIndex(session)
 
   // Host Action Dispatcher from Projector View
@@ -122,9 +130,16 @@ export default function ProjectorContainer({ sessionId, locale = 'en' }: Project
     sound.playClick()
     try {
       const currentSettings = (session.settings as Record<string, unknown>) || {}
-      const newSettings = typeof newQuestionIndex === 'number'
-        ? { ...currentSettings, question_index: newQuestionIndex }
-        : currentSettings
+      let newSettings: Record<string, unknown>
+
+      if (isDrawIt && (newStatus === 'question_active' || typeof newQuestionIndex === 'number')) {
+        const targetIdx = typeof newQuestionIndex === 'number' ? newQuestionIndex : currentIdx
+        newSettings = prepareDrawItRound(session, participants, targetIdx)
+      } else {
+        newSettings = typeof newQuestionIndex === 'number'
+          ? { ...currentSettings, question_index: newQuestionIndex }
+          : currentSettings
+      }
 
       const { data, error } = await supabase
         .from('game_sessions')
@@ -572,7 +587,8 @@ export default function ProjectorContainer({ sessionId, locale = 'en' }: Project
           )}
 
         {/* DRAW IT, GUESS IT STAGE */}
-        {session.activity_type === 'draw_it_guess_it' &&
+        {(session.activity_type === 'draw_it_guess_it' ||
+          (session.settings as any)?.game_mode === 'draw_it_guess_it') &&
           ['question_active', 'answer_collection_ended', 'answer_reveal', 'round_results'].includes(
             session.status
           ) && (

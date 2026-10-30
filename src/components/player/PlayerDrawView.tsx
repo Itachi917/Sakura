@@ -1,10 +1,23 @@
 'use client'
 
-import { useRef, useState, useEffect } from 'react'
-import { Palette, Send, RotateCcw, Brush, Sparkles } from 'lucide-react'
+import { useRef, useState, useEffect, useMemo } from 'react'
+import {
+  Palette,
+  Send,
+  RotateCcw,
+  Brush,
+  Sparkles,
+  Clock,
+  CheckCircle2,
+  Eraser,
+  Trophy,
+  AlertCircle,
+} from 'lucide-react'
 import type { GameSession, SessionParticipant } from '@/types/database'
 import { createClient } from '@/lib/supabase/client'
 import { sound } from '@/lib/sound'
+import { getMaskedWordHint } from '@/lib/gameHelpers'
+import { evaluateZoomGuess } from '@/lib/fuzzyMatch'
 
 interface PlayerDrawViewProps {
   session: GameSession
@@ -12,7 +25,34 @@ interface PlayerDrawViewProps {
   locale?: string
 }
 
-const PALETTE = ['#F4A7C5', '#FFFFFF', '#E05263', '#3B82F6', '#10B981', '#F59E0B']
+interface StrokeData {
+  prevX: number
+  prevY: number
+  currX: number
+  currY: number
+  color: string
+  size: number
+}
+
+interface GuessMessage {
+  id: string
+  nickname: string
+  text: string
+  isCorrect: boolean
+  points?: number
+  timestamp: string
+}
+
+const PALETTE = [
+  '#F4A7C5', // Sakura Pink
+  '#FFFFFF', // White
+  '#1c1026', // Dark Plum (Canvas Eraser match)
+  '#EF4444', // Red
+  '#3B82F6', // Blue
+  '#10B981', // Green
+  '#F59E0B', // Amber
+  '#A855F7', // Purple
+]
 
 export default function PlayerDrawView({
   session,
@@ -22,22 +62,139 @@ export default function PlayerDrawView({
   const supabase = createClient()
   const isRtl = locale === 'ar'
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
+  const mirrorCanvasRef = useRef<HTMLCanvasElement | null>(null)
 
-  const [isDrawer, setIsDrawer] = useState(false)
-  const [guessInput, setGuessInput] = useState('')
+  // Settings from session
+  const settings = useMemo(
+    () => (session.settings as Record<string, unknown>) || {},
+    [session.settings]
+  )
+
+  const drawerId = (settings.drawer_id as string) || null
+  const drawerNickname = (settings.drawer_nickname as string) || (isRtl ? 'الرسّام' : 'Drawer')
+  const secretWord = (settings.drawing_word as string) || 'Kunai'
+  const secretWordAr = (settings.drawing_word_ar as string) || 'كوناي'
+  const category = (settings.drawing_category as string) || 'Ninja Weapon'
+  const categoryAr = (settings.drawing_category_ar as string) || 'سلاح نينجا'
+  const aliases = useMemo(
+    () => (Array.isArray(settings.drawing_aliases) ? (settings.drawing_aliases as string[]) : []),
+    [settings.drawing_aliases]
+  )
+  const roundDuration = typeof settings.round_duration === 'number' ? settings.round_duration : 60
+  const roundDeadline = settings.round_deadline as string | undefined
+
+  // Strict Skribbl role: Server determines who draws and who guesses
+  const isDrawer = Boolean(drawerId && participant.id === drawerId)
+
+  const isRevealed =
+    session.status === 'answer_reveal' ||
+    session.status === 'round_results' ||
+    session.status === 'final_results'
+
+  // Timer calculation
+  const calculateTimeLeft = () => {
+    if (!roundDeadline) return roundDuration
+    const diff = Math.ceil((new Date(roundDeadline).getTime() - Date.now()) / 1000)
+    return Math.max(0, Math.min(roundDuration, diff))
+  }
+
+  const [timeLeft, setTimeLeft] = useState<number>(calculateTimeLeft)
+  const [elapsedSeconds, setElapsedSeconds] = useState<number>(0)
+  const isTimeExpired = timeLeft <= 0
+
+  // Drawing state (for drawer)
   const [selectedColor, setSelectedColor] = useState('#F4A7C5')
-  const [brushSize, setBrushSize] = useState(4)
+  const [brushSize, setBrushSize] = useState(5)
+  const [isEraser, setIsEraser] = useState(false)
   const [isDrawing, setIsDrawing] = useState(false)
   const [lastCoord, setLastCoord] = useState<{ x: number; y: number } | null>(null)
-  const [feedback, setFeedback] = useState<string | null>(null)
+  const [drawerSolvers, setDrawerSolvers] = useState<string[]>([])
+  const [drawerEarnedPoints, setDrawerEarnedPoints] = useState<number>(0)
 
-  // Clear Canvas helper
+  // Guessing state (for guessers)
+  const [guessInput, setGuessInput] = useState('')
+  const [hasSolved, setHasSolved] = useState(false)
+  const [solvedPoints, setSolvedPoints] = useState(0)
+  const [feedback, setFeedback] = useState<{ type: 'correct' | 'close' | 'wrong'; text: string } | null>(null)
+  const [recentGuesses, setRecentGuesses] = useState<GuessMessage[]>([])
+
+  const hasCommittedScore = useRef(false)
+
+  // Reset states on round change
+  useEffect(() => {
+    setHasSolved(false)
+    setSolvedPoints(0)
+    setFeedback(null)
+    setDrawerSolvers([])
+    setDrawerEarnedPoints(0)
+    setGuessInput('')
+    setRecentGuesses([])
+    hasCommittedScore.current = false
+    setElapsedSeconds(0)
+    setTimeLeft(calculateTimeLeft())
+
+    // Clear drawer canvas
+    if (canvasRef.current) {
+      const ctx = canvasRef.current.getContext('2d')
+      if (ctx) {
+        ctx.fillStyle = '#1c1026'
+        ctx.fillRect(0, 0, canvasRef.current.width, canvasRef.current.height)
+      }
+    }
+    // Clear mirror canvas
+    if (mirrorCanvasRef.current) {
+      const ctx = mirrorCanvasRef.current.getContext('2d')
+      if (ctx) {
+        ctx.fillStyle = '#1c1026'
+        ctx.fillRect(0, 0, mirrorCanvasRef.current.width, mirrorCanvasRef.current.height)
+      }
+    }
+  }, [settings.round_start_time, settings.drawing_word])
+
+  // Working Countdown Timer
+  useEffect(() => {
+    if (isRevealed) return
+
+    const timer = setInterval(() => {
+      const remaining = calculateTimeLeft()
+      setTimeLeft(remaining)
+      setElapsedSeconds(roundDuration - remaining)
+
+      if (remaining <= 5 && remaining > 0 && !hasSolved && !isDrawer) {
+        sound.playTick()
+      }
+
+      if (remaining <= 0) {
+        clearInterval(timer)
+      }
+    }, 1000)
+
+    return () => clearInterval(timer)
+  }, [roundDeadline, isRevealed, roundDuration, hasSolved, isDrawer])
+
+  // Commit points on reveal phase
+  useEffect(() => {
+    if (isRevealed && !hasCommittedScore.current) {
+      const pointsToAdd = isDrawer ? drawerEarnedPoints : (hasSolved ? solvedPoints : 0)
+      if (pointsToAdd > 0) {
+        hasCommittedScore.current = true
+        supabase
+          .from('session_participants')
+          .update({ score: (participant.score || 0) + pointsToAdd })
+          .eq('id', participant.id)
+          .then(() => {})
+      }
+    }
+  }, [isRevealed, isDrawer, drawerEarnedPoints, hasSolved, solvedPoints, participant.id, participant.score, supabase])
+
+  // Clear Canvas helper (drawer)
   const handleClear = () => {
     const canvas = canvasRef.current
     if (!canvas) return
     const ctx = canvas.getContext('2d')
     if (!ctx) return
-    ctx.clearRect(0, 0, canvas.width, canvas.height)
+    ctx.fillStyle = '#1c1026'
+    ctx.fillRect(0, 0, canvas.width, canvas.height)
 
     supabase.channel(`draw_stream_${session.id}`).send({
       type: 'broadcast',
@@ -46,8 +203,64 @@ export default function PlayerDrawView({
     })
   }
 
-  // Touch & Mouse Drawing Handlers
+  // Draw incoming stroke on mirror canvas (for guessers)
+  const drawMirrorStroke = (stroke: StrokeData) => {
+    const canvas = mirrorCanvasRef.current
+    if (!canvas) return
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+
+    ctx.strokeStyle = stroke.color
+    ctx.lineWidth = stroke.size
+    ctx.lineCap = 'round'
+    ctx.lineJoin = 'round'
+
+    ctx.beginPath()
+    ctx.moveTo(stroke.prevX * canvas.width, stroke.prevY * canvas.height)
+    ctx.lineTo(stroke.currX * canvas.width, stroke.currY * canvas.height)
+    ctx.stroke()
+  }
+
+  // Realtime channel for strokes and guesses
+  useEffect(() => {
+    const channel = supabase
+      .channel(`draw_stream_${session.id}`)
+      .on('broadcast', { event: 'draw_stroke' }, (payload) => {
+        if (!isDrawer) {
+          drawMirrorStroke(payload.payload)
+        }
+      })
+      .on('broadcast', { event: 'clear_canvas' }, () => {
+        if (!isDrawer && mirrorCanvasRef.current) {
+          const ctx = mirrorCanvasRef.current.getContext('2d')
+          if (ctx) {
+            ctx.fillStyle = '#1c1026'
+            ctx.fillRect(0, 0, mirrorCanvasRef.current.width, mirrorCanvasRef.current.height)
+          }
+        }
+      })
+      .on('broadcast', { event: 'new_guess' }, (payload) => {
+        const guess = payload.payload as GuessMessage
+        setRecentGuesses((prev) => [guess, ...prev.slice(0, 10)])
+
+        if (guess.isCorrect) {
+          if (isDrawer) {
+            sound.playFanfare()
+            setDrawerSolvers((prev) => (prev.includes(guess.nickname) ? prev : [...prev, guess.nickname]))
+            setDrawerEarnedPoints((prev) => prev + 150)
+          }
+        }
+      })
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [session.id, isDrawer, supabase])
+
+  // Touch & Mouse Handlers for Drawer Canvas
   const startDrawing = (clientX: number, clientY: number) => {
+    if (isRevealed || isTimeExpired) return
     const canvas = canvasRef.current
     if (!canvas) return
     const rect = canvas.getBoundingClientRect()
@@ -58,25 +271,29 @@ export default function PlayerDrawView({
   }
 
   const drawMove = (clientX: number, clientY: number) => {
-    if (!isDrawing || !lastCoord) return
+    if (!isDrawing || !lastCoord || isRevealed || isTimeExpired) return
     const canvas = canvasRef.current
     if (!canvas) return
     const rect = canvas.getBoundingClientRect()
     const currX = (clientX - rect.left) / rect.width
     const currY = (clientY - rect.top) / rect.height
 
+    const strokeColor = isEraser ? '#1c1026' : selectedColor
+    const activeSize = isEraser ? brushSize * 2.5 : brushSize
+
     const ctx = canvas.getContext('2d')
     if (ctx) {
-      ctx.strokeStyle = selectedColor
-      ctx.lineWidth = brushSize
+      ctx.strokeStyle = strokeColor
+      ctx.lineWidth = activeSize
       ctx.lineCap = 'round'
+      ctx.lineJoin = 'round'
       ctx.beginPath()
       ctx.moveTo(lastCoord.x * canvas.width, lastCoord.y * canvas.height)
       ctx.lineTo(currX * canvas.width, currY * canvas.height)
       ctx.stroke()
     }
 
-    // Stream stroke
+    // Stream stroke to projector and other players
     supabase.channel(`draw_stream_${session.id}`).send({
       type: 'broadcast',
       event: 'draw_stroke',
@@ -85,8 +302,8 @@ export default function PlayerDrawView({
         prevY: lastCoord.y,
         currX,
         currY,
-        color: selectedColor,
-        size: brushSize,
+        color: strokeColor,
+        size: activeSize,
       },
     })
 
@@ -98,150 +315,364 @@ export default function PlayerDrawView({
     setLastCoord(null)
   }
 
-  // Handle Guess Submission
+  // Handle Guess Submission (Guesser)
   const handleSendGuess = async (e: React.FormEvent) => {
     e.preventDefault()
     const cleanGuess = guessInput.trim()
-    if (!cleanGuess) return
+    if (!cleanGuess || hasSolved || isRevealed || isTimeExpired) return
 
-    sound.playClick()
     setGuessInput('')
 
-    // Broadcast guess to projector
-    await supabase.channel(`draw_stream_${session.id}`).send({
-      type: 'broadcast',
-      event: 'new_guess',
-      payload: {
-        id: crypto.randomUUID(),
-        nickname: participant.nickname,
-        text: cleanGuess,
-        isCorrect: false,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-      },
-    })
+    // Evaluate guess using Skribbl / fuzzy match rules
+    const result = evaluateZoomGuess(
+      cleanGuess,
+      secretWord,
+      secretWordAr,
+      aliases
+    )
 
-    setFeedback(isRtl ? 'تم إرسال تخمينك! 🌸' : 'Guess submitted! 🌸')
-    setTimeout(() => setFeedback(null), 1500)
+    if (result.isCorrect) {
+      sound.playCorrect()
+      sound.playFanfare()
+
+      // Calculate speed points: faster = more points
+      const potential = Math.max(150, Math.round(500 * (Math.max(1, timeLeft) / roundDuration)))
+      setHasSolved(true)
+      setSolvedPoints(potential)
+      setFeedback({
+        type: 'correct',
+        text: isRtl
+          ? `🎉 أحسنت! إجابة صحيحة وممتازة (+${potential} نقطة)`
+          : `🎉 Correct! Awesome job (+${potential} pts)`,
+      })
+
+      // Broadcast solve to room (hides word in chat)
+      await supabase.channel(`draw_stream_${session.id}`).send({
+        type: 'broadcast',
+        event: 'new_guess',
+        payload: {
+          id: crypto.randomUUID(),
+          nickname: participant.nickname,
+          text: isRtl ? 'خمّن الكلمة بنجاح!' : 'Guessed the word!',
+          isCorrect: true,
+          points: potential,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+        },
+      })
+    } else if (result.isClose) {
+      sound.playClick()
+      setFeedback({
+        type: 'close',
+        text: isRtl ? '🔥 قريب جداً! قاربت على الحل!' : "🔥 Very close! You're almost there!",
+      })
+      setTimeout(() => setFeedback(null), 3000)
+    } else {
+      sound.playWrong()
+      setFeedback({
+        type: 'wrong',
+        text: isRtl ? '❌ تخمين غير صحيح، جرّب مجدداً' : '❌ Not quite, keep guessing!',
+      })
+      setTimeout(() => setFeedback(null), 2500)
+
+      // Broadcast incorrect guess to chat ticker
+      await supabase.channel(`draw_stream_${session.id}`).send({
+        type: 'broadcast',
+        event: 'new_guess',
+        payload: {
+          id: crypto.randomUUID(),
+          nickname: participant.nickname,
+          text: cleanGuess,
+          isCorrect: false,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+        },
+      })
+    }
   }
 
+  // Active word and masked representation
+  const activeWord = isRtl ? secretWordAr : secretWord
+  const maskedHint = getMaskedWordHint(activeWord, elapsedSeconds, roundDuration)
+
   return (
-    <div className="w-full max-w-md flex flex-col justify-between h-full py-2 animate-fade-in">
-      {/* Role Toggle for physical club flexibility */}
-      <div className="flex items-center justify-between mb-3 bg-black/40 p-1.5 rounded-2xl border border-pink-500/20">
-        <button
-          onClick={() => setIsDrawer(false)}
-          className={`flex-1 py-1.5 rounded-xl font-bold text-xs transition-all ${
-            !isDrawer ? 'bg-pink-600 text-white shadow-md' : 'text-pink-300/60'
+    <div className="w-full max-w-md mx-auto flex flex-col justify-between h-full py-2 animate-fade-in pb-12">
+      {/* ── TOP ROLE & TIMER HEADER ── */}
+      <div className="flex items-center justify-between p-3 rounded-2xl bg-[#1c1026]/90 border border-pink-500/20 shadow-lg backdrop-blur-md mb-3">
+        <div className="flex items-center gap-2.5">
+          <div className="w-9 h-9 rounded-xl bg-pink-500/20 border border-pink-400/30 flex items-center justify-center text-pink-300">
+            <Palette size={18} />
+          </div>
+          <div>
+            <div className="flex items-center gap-1.5">
+              <span className="text-[11px] uppercase tracking-wider text-pink-300/80 font-bold">
+                {isDrawer
+                  ? isRtl ? 'أنت الرسّام 🎨' : 'You are Drawing 🎨'
+                  : isRtl ? `الرسّام: ${drawerNickname} 🎨` : `Drawer: ${drawerNickname} 🎨`}
+              </span>
+            </div>
+            <div className="text-[11px] text-pink-200/70">
+              {isRtl ? categoryAr : category}
+            </div>
+          </div>
+        </div>
+
+        {/* Working Timer */}
+        <div
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border font-mono font-bold text-sm transition-all ${
+            timeLeft <= 10 && !isRevealed
+              ? 'bg-rose-500/30 border-rose-500/60 text-rose-200 animate-pulse'
+              : 'bg-pink-500/15 border-pink-400/30 text-pink-200'
           }`}
         >
-          {isRtl ? 'أنا أخمّن 🎯' : 'I am Guessing 🎯'}
-        </button>
-        <button
-          onClick={() => setIsDrawer(true)}
-          className={`flex-1 py-1.5 rounded-xl font-bold text-xs transition-all ${
-            isDrawer ? 'bg-pink-600 text-white shadow-md' : 'text-pink-300/60'
-          }`}
-        >
-          {isRtl ? 'أنا أرسم 🎨' : 'I am Drawing 🎨'}
-        </button>
+          <Clock size={15} />
+          <span>{timeLeft}s</span>
+        </div>
       </div>
 
+      {/* ── DRAWER INTERFACE ── */}
       {isDrawer ? (
-        /* DRAWER CANVAS INTERFACE */
-        <div className="flex-1 flex flex-col justify-between">
-          <div className="mb-2 p-2 rounded-xl bg-pink-500/15 border border-pink-400/30 text-center">
-            <span className="text-[10px] uppercase tracking-wider text-pink-300 font-bold block">
-              {isRtl ? 'كلمتك للرسم (سرية):' : 'Your Secret Word to Draw:'}
+        <div className="flex-1 flex flex-col justify-between gap-3">
+          {/* Secret Word Prompt (Drawer Eyes Only) */}
+          <div className="p-3 rounded-2xl bg-gradient-to-r from-pink-500/20 via-purple-500/20 to-pink-500/20 border-2 border-pink-400/40 text-center shadow-lg">
+            <span className="text-[10px] uppercase tracking-wider text-pink-300 font-bold block mb-0.5">
+              {isRtl ? 'كلمتك السرية للرسم (ارسمها الآن!):' : 'Your Secret Word to Draw:'}
             </span>
-            <span className="font-bold text-lg text-white">Kunai (كوناي) 🗡️</span>
+            <div className="flex items-center justify-center gap-2">
+              <span className="font-black text-xl lg:text-2xl text-white">
+                {secretWordAr}
+              </span>
+              <span className="text-sm font-semibold text-pink-300">
+                ({secretWord})
+              </span>
+            </div>
           </div>
 
-          {/* Touch Canvas */}
-          <div className="w-full aspect-[4/3] rounded-2xl overflow-hidden border-2 border-pink-500/30 bg-[#1c1026] touch-none shadow-xl">
+          {/* Touch Drawing Canvas */}
+          <div className="w-full aspect-[4/3] rounded-2xl overflow-hidden border-2 border-pink-500/40 bg-[#1c1026] touch-none shadow-2xl relative">
             <canvas
               ref={canvasRef}
               width={400}
               height={300}
-              className="w-full h-full object-contain"
-              onMouseDown={e => startDrawing(e.clientX, e.clientY)}
-              onMouseMove={e => drawMove(e.clientX, e.clientY)}
+              className="w-full h-full object-contain cursor-crosshair"
+              onMouseDown={(e) => startDrawing(e.clientX, e.clientY)}
+              onMouseMove={(e) => drawMove(e.clientX, e.clientY)}
               onMouseUp={stopDrawing}
               onMouseLeave={stopDrawing}
-              onTouchStart={e => {
+              onTouchStart={(e) => {
                 if (e.touches[0]) startDrawing(e.touches[0].clientX, e.touches[0].clientY)
               }}
-              onTouchMove={e => {
+              onTouchMove={(e) => {
                 if (e.touches[0]) drawMove(e.touches[0].clientX, e.touches[0].clientY)
               }}
               onTouchEnd={stopDrawing}
             />
+
+            {/* Expired Overlay */}
+            {(isRevealed || isTimeExpired) && (
+              <div className="absolute inset-0 bg-black/60 backdrop-blur-xs flex flex-col items-center justify-center text-center p-4">
+                <span className="text-2xl mb-1">⌛</span>
+                <span className="text-lg font-black text-white">
+                  {isRtl ? 'انتهى وقت الجولة!' : "Round Time's Up!"}
+                </span>
+                <span className="text-xs text-pink-300 mt-1">
+                  {isRtl
+                    ? `نجح ${drawerSolvers.length} لاعبين في تخمين رسمتك (+${drawerEarnedPoints} نقطة لك)`
+                    : `${drawerSolvers.length} players guessed your drawing (+${drawerEarnedPoints} pts)`}
+                </span>
+              </div>
+            )}
           </div>
 
-          {/* Color & Brush Controls */}
-          <div className="mt-3 flex items-center justify-between gap-2 p-2 rounded-xl bg-black/40 border border-pink-500/15">
-            <div className="flex items-center gap-1.5">
-              {PALETTE.map(color => (
-                <button
-                  key={color}
-                  onClick={() => setSelectedColor(color)}
-                  style={{ backgroundColor: color }}
-                  className={`w-7 h-7 rounded-full transition-transform ${
-                    selectedColor === color ? 'scale-125 ring-2 ring-white shadow-md' : ''
-                  }`}
-                  aria-label={`Color ${color}`}
-                />
-              ))}
+          {/* Drawing Tools: Palette, Eraser, Brush, Clear */}
+          <div className="flex flex-col gap-2 p-2.5 rounded-2xl bg-black/40 border border-pink-500/15">
+            {/* Color Palette */}
+            <div className="flex items-center justify-between gap-1.5 overflow-x-auto pb-1">
+              <div className="flex items-center gap-1.5">
+                {PALETTE.map((color) => (
+                  <button
+                    key={color}
+                    onClick={() => {
+                      setSelectedColor(color)
+                      setIsEraser(false)
+                    }}
+                    style={{ backgroundColor: color }}
+                    className={`w-7 h-7 rounded-full transition-transform ${
+                      !isEraser && selectedColor === color ? 'scale-125 ring-2 ring-white shadow-md' : 'opacity-80'
+                    }`}
+                    aria-label={`Color ${color}`}
+                  />
+                ))}
+              </div>
+
+              {/* Eraser Toggle */}
+              <button
+                onClick={() => setIsEraser((prev) => !prev)}
+                className={`p-1.5 rounded-xl border text-xs font-bold flex items-center gap-1 transition-all ${
+                  isEraser
+                    ? 'bg-pink-600 text-white border-pink-400 shadow-md scale-105'
+                    : 'bg-white/5 text-pink-300 border-pink-500/20 hover:bg-white/10'
+                }`}
+              >
+                <Eraser size={14} />
+                <span>{isRtl ? 'ممحاة' : 'Eraser'}</span>
+              </button>
             </div>
 
-            <button
-              onClick={handleClear}
-              className="p-2 rounded-lg bg-white/5 hover:bg-white/10 text-pink-300 border border-pink-500/20 text-xs font-semibold flex items-center gap-1"
-            >
-              <RotateCcw size={14} />
-              <span>{isRtl ? 'مسح' : 'Clear'}</span>
-            </button>
+            {/* Brush Sizes & Clear */}
+            <div className="flex items-center justify-between border-t border-pink-500/10 pt-2">
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] text-pink-300 font-bold uppercase">
+                  {isRtl ? 'الفرشاة:' : 'Brush:'}
+                </span>
+                {[
+                  { label: isRtl ? 'صغيرة' : 'S', size: 3 },
+                  { label: isRtl ? 'وسط' : 'M', size: 7 },
+                  { label: isRtl ? 'كبيرة' : 'L', size: 14 },
+                ].map((b) => (
+                  <button
+                    key={b.size}
+                    onClick={() => setBrushSize(b.size)}
+                    className={`px-2 py-0.5 rounded-lg text-xs font-bold transition-all ${
+                      brushSize === b.size
+                        ? 'bg-pink-500 text-white shadow-sm'
+                        : 'bg-white/5 text-pink-300/70 hover:bg-white/10'
+                    }`}
+                  >
+                    {b.label}
+                  </button>
+                ))}
+              </div>
+
+              <button
+                onClick={handleClear}
+                className="px-2.5 py-1 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/20 text-xs font-bold flex items-center gap-1 transition-all"
+              >
+                <RotateCcw size={13} />
+                <span>{isRtl ? 'مسح الكل' : 'Clear'}</span>
+              </button>
+            </div>
           </div>
+
+          {/* Solvers notification ticker for drawer */}
+          {drawerSolvers.length > 0 && (
+            <div className="p-2 rounded-xl bg-emerald-500/15 border border-emerald-400/30 text-emerald-200 text-xs font-bold flex items-center justify-between animate-fade-in">
+              <div className="flex items-center gap-1.5">
+                <Sparkles size={14} className="text-emerald-300" />
+                <span>
+                  {isRtl
+                    ? `خمّنها (${drawerSolvers.length}): ${drawerSolvers.slice(-2).join('، ')}`
+                    : `Guessed by (${drawerSolvers.length}): ${drawerSolvers.slice(-2).join(', ')}`}
+                </span>
+              </div>
+              <span className="font-mono text-emerald-300">+{drawerEarnedPoints}</span>
+            </div>
+          )}
         </div>
       ) : (
-        /* GUESSER INTERFACE */
-        <div className="flex-1 flex flex-col justify-center">
-          <div className="text-center mb-6">
-            <div className="w-16 h-16 rounded-2xl bg-pink-500/20 border border-pink-400/30 flex items-center justify-center text-pink-300 mx-auto mb-3 animate-pulse">
-              <Sparkles size={32} />
-            </div>
-            <h3 className="text-xl font-black text-white">
-              {isRtl ? 'انظر إلى شاشة العرض وخمّن!' : 'Watch the Projector & Guess!'}
-            </h3>
-            <p className="text-xs text-pink-200/70 mt-1">
-              {isRtl
-                ? 'اكتب ما يعبر عنه الرسم في الخانة أدناه بأسرع ما يمكن'
-                : 'Type what you think is being drawn as fast as you can'}
-            </p>
+        /* ── GUESSER INTERFACE ── */
+        <div className="flex-1 flex flex-col justify-between gap-3">
+          {/* Masked Word Hint */}
+          <div className="p-3 rounded-2xl bg-black/40 border border-pink-500/20 text-center">
+            <span className="text-[10px] uppercase tracking-wider text-pink-300 font-bold block mb-1">
+              {isRevealed
+                ? isRtl ? 'الكلمة المطلوبة كانت 🎉' : 'The Word Was 🎉'
+                : isRtl ? 'تلميح الحروف 💡' : 'Word Hint 💡'}
+            </span>
+            {isRevealed ? (
+              <div className="flex items-center justify-center gap-2">
+                <span className="font-bold text-xl text-emerald-300">{secretWordAr}</span>
+                <span className="text-sm text-pink-300 font-semibold">({secretWord})</span>
+              </div>
+            ) : (
+              <div className="font-mono text-2xl font-black tracking-[0.25em] text-white">
+                {maskedHint}
+              </div>
+            )}
           </div>
 
+          {/* Live Mirror Canvas of Drawer's Strokes */}
+          <div className="w-full aspect-[4/3] rounded-2xl overflow-hidden border-2 border-pink-500/30 bg-[#1c1026] shadow-xl relative">
+            <canvas
+              ref={mirrorCanvasRef}
+              width={400}
+              height={300}
+              className="w-full h-full object-contain pointer-events-none"
+            />
+            <div className="absolute top-2 right-2 px-2 py-0.5 rounded-full bg-black/60 border border-pink-500/20 text-[10px] text-pink-300 font-bold">
+              {isRtl ? 'بث حي من الرسّام 📡' : 'Live Stream 📡'}
+            </div>
+          </div>
+
+          {/* Feedback alert */}
           {feedback && (
-            <div className="mb-3 p-2 rounded-xl bg-pink-500/20 border border-pink-400/30 text-center text-xs font-bold text-pink-200 animate-scale-in">
-              {feedback}
+            <div
+              className={`p-2.5 rounded-xl border text-center text-xs font-bold animate-scale-in ${
+                feedback.type === 'correct'
+                  ? 'bg-emerald-500/20 border-emerald-400 text-emerald-200'
+                  : feedback.type === 'close'
+                  ? 'bg-amber-500/20 border-amber-400 text-amber-200'
+                  : 'bg-rose-500/20 border-rose-400 text-rose-200'
+              }`}
+            >
+              {feedback.text}
             </div>
           )}
 
-          <form onSubmit={handleSendGuess} className="space-y-3">
-            <input
-              type="text"
-              value={guessInput}
-              onChange={e => setGuessInput(e.target.value)}
-              placeholder={isRtl ? 'اكتب تخمينك هنا...' : 'Type your guess here...'}
-              className="w-full py-3.5 px-4 rounded-2xl bg-[rgba(15,8,22,0.6)] border-2 border-[rgba(244,167,197,0.3)] focus:border-[var(--sakura-pink)] text-white text-base focus:outline-none"
-              autoComplete="off"
-            />
-            <button
-              type="submit"
-              className="w-full py-3.5 px-6 rounded-2xl bg-gradient-to-r from-pink-500 via-rose-500 to-purple-600 text-white font-bold text-base shadow-xl flex items-center justify-center gap-2 active:scale-95 transition-transform"
-            >
-              <Send size={18} className={isRtl ? 'rotate-180' : ''} />
-              <span>{isRtl ? 'إرسال التخمين 🚀' : 'Submit Guess 🚀'}</span>
-            </button>
-          </form>
+          {/* Solved Card or Guess Input Form */}
+          {hasSolved ? (
+            <div className="p-4 rounded-2xl bg-gradient-to-r from-emerald-500/20 to-teal-500/20 border-2 border-emerald-400/60 text-center animate-fade-in shadow-xl">
+              <div className="w-10 h-10 rounded-full bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 flex items-center justify-center mx-auto mb-2">
+                <CheckCircle2 size={24} />
+              </div>
+              <h4 className="font-black text-white text-base">
+                {isRtl ? 'لقد خمّنت الكلمة بنجاح! 🎉' : 'You guessed the word! 🎉'}
+              </h4>
+              <p className="text-xs text-emerald-300 font-mono font-bold mt-1">
+                +{solvedPoints} {isRtl ? 'نقطة تضاف لرصيدك' : 'points awarded'}
+              </p>
+              <p className="text-[11px] text-pink-200/60 mt-1">
+                {isRtl ? 'شاهد تخمينات زملائك على شاشة العرض' : 'Watch your peers on the projector'}
+              </p>
+            </div>
+          ) : isRevealed || isTimeExpired ? (
+            <div className="p-4 rounded-2xl bg-black/50 border border-pink-500/20 text-center">
+              <span className="text-xl">⌛</span>
+              <p className="text-xs font-bold text-pink-200 mt-1">
+                {isRtl
+                  ? `انتهى الوقت! الكلمة كانت: ${secretWordAr} (${secretWord})`
+                  : `Time's up! The word was: ${secretWord}`}
+              </p>
+            </div>
+          ) : (
+            <form onSubmit={handleSendGuess} className="flex gap-2">
+              <input
+                type="text"
+                value={guessInput}
+                onChange={(e) => setGuessInput(e.target.value)}
+                placeholder={isRtl ? 'اكتب تخمينك هنا...' : 'Type your guess here...'}
+                className="flex-1 py-3 px-4 rounded-2xl bg-[rgba(15,8,22,0.7)] border-2 border-[rgba(244,167,197,0.3)] focus:border-[var(--sakura-pink)] text-white text-sm focus:outline-none"
+                autoComplete="off"
+                disabled={isTimeExpired || isRevealed}
+              />
+              <button
+                type="submit"
+                disabled={!guessInput.trim() || isTimeExpired || isRevealed}
+                className="px-5 py-3 rounded-2xl bg-gradient-to-r from-pink-500 to-rose-500 text-white font-bold text-sm shadow-lg flex items-center justify-center gap-1.5 active:scale-95 disabled:opacity-50 transition-all cursor-pointer"
+              >
+                <Send size={16} className={isRtl ? 'rotate-180' : ''} />
+                <span>{isRtl ? 'إرسال' : 'Guess'}</span>
+              </button>
+            </form>
+          )}
+
+          {/* Recent guess ticker */}
+          {recentGuesses.length > 0 && !hasSolved && (
+            <div className="flex items-center gap-1 text-[11px] text-pink-300/60 truncate px-1">
+              <span className="font-bold">{isRtl ? 'آخر تخمين:' : 'Latest:'}</span>
+              <span className="text-white truncate">
+                {recentGuesses[0]?.nickname}: {recentGuesses[0]?.isCorrect ? '🌟 خمّن الكلمة' : recentGuesses[0]?.text}
+              </span>
+            </div>
+          )}
         </div>
       )}
     </div>

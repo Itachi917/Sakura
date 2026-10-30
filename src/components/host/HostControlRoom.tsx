@@ -26,7 +26,7 @@ import {
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { sound } from '@/lib/sound'
-import { getQuestionIndex, getParticipantAvatar } from '@/lib/gameHelpers'
+import { getQuestionIndex, getParticipantAvatar, prepareDrawItRound } from '@/lib/gameHelpers'
 import type { GameSession, SessionParticipant } from '@/types/database'
 import {
   WHOS_THAT_CHARACTER_QUESTIONS,
@@ -34,6 +34,7 @@ import {
   ANIME_EXPERT_EXAM_QUESTIONS,
   SAKURA_FEUD_ROUNDS,
   ZOOM_GUESS_QUESTIONS,
+  DRAWING_WORDS,
   type QuizQuestionData,
   type FeudQuestionData,
   type ZoomGuessQuestionData,
@@ -423,11 +424,20 @@ export default function HostControlRoom({ sessionId, locale = 'en' }: HostContro
 
     try {
       const currentSettings = (session?.settings as Record<string, unknown>) || {}
+      let newSettings: Record<string, unknown>
+
+      if (session?.activity_type === 'draw_it_guess_it' && (newStatus === 'question_active' || typeof newQuestionIndex === 'number')) {
+        const targetIdx = typeof newQuestionIndex === 'number' ? newQuestionIndex : currentIndex
+        newSettings = prepareDrawItRound(session, participants, targetIdx)
+      } else {
+        newSettings = typeof newQuestionIndex === 'number'
+          ? { ...currentSettings, question_index: newQuestionIndex }
+          : currentSettings
+      }
+
       const updates = {
         status: newStatus,
-        settings: (typeof newQuestionIndex === 'number'
-          ? { ...currentSettings, question_index: newQuestionIndex }
-          : currentSettings) as unknown as import('@/types/database').Json,
+        settings: newSettings as unknown as import('@/types/database').Json,
       }
 
       const { data, error } = await supabase
@@ -488,7 +498,14 @@ export default function HostControlRoom({ sessionId, locale = 'en' }: HostContro
 
   const currentIndex = getQuestionIndex(session)
   const isZoomGame = session.activity_type === 'zoom_guess' || (session.settings as any)?.game_mode === 'zoom_guess'
-  const totalQuestions = (isZoomGame ? zoomQuestions.length : 0) || quizQuestions.length || feudRounds.length || 5
+  const totalQuestions =
+    (isZoomGame ? zoomQuestions.length : 0) ||
+    (session?.activity_type === 'draw_it_guess_it'
+      ? Math.min(15, Math.max(DRAWING_WORDS.length, participants.length || 5))
+      : 0) ||
+    quizQuestions.length ||
+    feudRounds.length ||
+    5
   const currentQuizQ = quizQuestions[currentIndex]
   const currentFeudQ = feudRounds[currentIndex]
   const currentZoomQ = isZoomGame ? (zoomQuestions[currentIndex] || zoomQuestions[0]) : null

@@ -318,6 +318,10 @@ export default function AdminDashboard({ locale = 'en' }: AdminDashboardProps) {
         settingsPayload.game_mode = 'zoom_guess'
         settingsPayload.zoom_questions = zoomQuestions
       }
+      if (selectedActivity === 'draw_it_guess_it') {
+        settingsPayload.game_mode = 'draw_it_guess_it'
+        settingsPayload.round_duration = 60
+      }
 
       let { data: newSess, error } = await supabase
         .from('game_sessions')
