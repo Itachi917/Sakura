@@ -508,6 +508,7 @@ export function advanceGarticPhonePhase(
       const targetOwnerId = order[(idx - 1 + N) % N]
       const chain = targetOwnerId ? chains[targetOwnerId] : null
       const drawingData = extractGarticSubmissionContent(rawSubmissions[pId])
+      const fallbackSvg = `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300" viewBox="0 0 400 300"><rect width="100%" height="100%" fill="%231c1026"/><text x="50%" y="45%" text-anchor="middle" fill="%23f472b6" font-size="28" font-family="sans-serif">🎨 🌸</text><text x="50%" y="62%" text-anchor="middle" fill="%23fbcfe8" font-size="13" font-family="sans-serif">لم يتم رسم لوحة / No drawing</text></svg>`
 
       if (chain) {
         // Turn 1 is the drawing
@@ -515,7 +516,7 @@ export function advanceGarticPhonePhase(
           participantId: pId,
           nickname: p.nickname,
           type: 'drawing',
-          content: drawingData, // exact drawing made by player pId!
+          content: drawingData || fallbackSvg, // exact drawing made by player pId or fallback canvas
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         }
       }

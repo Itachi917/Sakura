@@ -150,6 +150,12 @@ export default function ProjectorGarticPhone({
         })
         .eq('id', session.id)
 
+      await supabase.channel(`gartic_phone_${session.id}`).send({
+        type: 'broadcast',
+        event: 'phase_advanced',
+        payload: { settings: updatedSettings },
+      })
+
       setSubmissions({})
     } catch (err) {
       console.error('Error auto advancing phase:', err)
@@ -207,43 +213,87 @@ export default function ProjectorGarticPhone({
   }
 
   // Album presentation navigation
-  const handleNextSlide = () => {
+  const handleNextSlide = async () => {
     sound.playClick()
     if (!currentChain) return
     const maxSteps = currentChain.turns.length - 1
     if (slideStep < maxSteps) {
-      setSlideStep((prev) => prev + 1)
+      const nextStep = slideStep + 1
+      setSlideStep(nextStep)
       sound.playFanfare()
+      await supabase.channel(`gartic_phone_${session.id}`).send({
+        type: 'broadcast',
+        event: 'album_step',
+        payload: { albumIndex: albumIdx, slideStep: nextStep },
+      })
     } else {
       // Advance to next album chain
-      handleNextAlbum()
+      await handleNextAlbum()
     }
   }
 
-  const handlePrevSlide = () => {
+  const handlePrevSlide = async () => {
     sound.playClick()
     if (slideStep > 0) {
-      setSlideStep((prev) => prev - 1)
+      const prevStep = slideStep - 1
+      setSlideStep(prevStep)
+      await supabase.channel(`gartic_phone_${session.id}`).send({
+        type: 'broadcast',
+        event: 'album_step',
+        payload: { albumIndex: albumIdx, slideStep: prevStep },
+      })
     } else if (albumIdx > 0) {
-      setAlbumIdx((prev) => prev - 1)
+      const prevIdx = albumIdx - 1
+      setAlbumIdx(prevIdx)
+      setSlideStep(0)
+      await supabase
+        .from('game_sessions')
+        .update({
+          settings: {
+            ...settings,
+            current_album_index: prevIdx,
+          } as unknown as import('@/types/database').Json,
+        })
+        .eq('id', session.id)
+      await supabase.channel(`gartic_phone_${session.id}`).send({
+        type: 'broadcast',
+        event: 'album_nav',
+        payload: { albumIndex: prevIdx, slideStep: 0 },
+      })
     }
   }
 
   const handleNextAlbum = async () => {
     sound.playFanfare()
-    const nextIdx = (albumIdx + 1) % (chainList.length || 1)
-    setAlbumIdx(nextIdx)
-    setSlideStep(0)
+    if (albumIdx + 1 < chainList.length) {
+      const nextIdx = albumIdx + 1
+      setAlbumIdx(nextIdx)
+      setSlideStep(0)
 
-    await supabase
-      .from('game_sessions')
-      .update({
-        settings: {
-          ...settings,
-          current_album_index: nextIdx,
-        } as unknown as import('@/types/database').Json,
+      await supabase
+        .from('game_sessions')
+        .update({
+          settings: {
+            ...settings,
+            current_album_index: nextIdx,
+          } as unknown as import('@/types/database').Json,
+        })
+        .eq('id', session.id)
+
+      await supabase.channel(`gartic_phone_${session.id}`).send({
+        type: 'broadcast',
+        event: 'album_nav',
+        payload: { albumIndex: nextIdx, slideStep: 0 },
       })
-      .eq('id', session.id)
+    } else {
+      // Completed all stories! Crown winners / final results
+      await supabase
+        .from('game_sessions')
+        .update({
+          status: 'final_results',
+        })
+        .eq('id', session.id)
+    }
   }
 
   const submittedCount = Object.keys(submissions).length
@@ -578,7 +628,9 @@ export default function ProjectorGarticPhone({
                 className="px-6 py-2.5 rounded-2xl bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-400 text-white font-extrabold text-xs shadow-lg shadow-pink-500/30"
               >
                 {slideStep === (currentChain.turns.length - 1)
-                  ? (isRtl ? 'الألبوم التالي ⏭️' : 'Next Story ⏭️')
+                  ? (albumIdx + 1 >= chainList.length
+                      ? (isRtl ? 'تتويج الفائزين والنتائج 🏆' : 'Final Podium 🏆')
+                      : (isRtl ? 'الألبوم التالي ⏭️' : 'Next Story ⏭️'))
                   : (isRtl ? 'كشف الخطوة التالية 👁️' : 'Reveal Next Step 👁️')}
               </button>
             </div>

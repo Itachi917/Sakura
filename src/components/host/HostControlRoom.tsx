@@ -545,6 +545,11 @@ export default function HostControlRoom({ sessionId, locale = 'en' }: HostContro
             .select()
             .single()
           if (data) setSession(data)
+          await supabase.channel(`gartic_phone_${session.id}`).send({
+            type: 'broadcast',
+            event: 'album_nav',
+            payload: { albumIndex: currentAlbumIdx + 1, slideStep: 0 },
+          })
         } else {
           updateSessionStatus('final_results')
         }
@@ -557,6 +562,11 @@ export default function HostControlRoom({ sessionId, locale = 'en' }: HostContro
           .select()
           .single()
         if (data) setSession(data)
+        await supabase.channel(`gartic_phone_${session.id}`).send({
+          type: 'broadcast',
+          event: 'phase_advanced',
+          payload: { settings: nextSettings },
+        })
       }
     } catch (err) {
       console.error('Error advancing gartic phase:', err)

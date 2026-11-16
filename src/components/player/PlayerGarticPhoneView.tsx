@@ -140,16 +140,28 @@ export default function PlayerGarticPhoneView({
   const supabase = createClient()
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
 
+  const [localSettings, setLocalSettings] = useState<Record<string, unknown> | null>(null)
+
   const settings = useMemo(
-    () => (session.settings as Record<string, unknown>) || {},
-    [session.settings]
+    () => (localSettings || (session.settings as Record<string, unknown>) || {}),
+    [localSettings, session.settings]
   )
 
   const phase = (settings.phone_phase as 'prompt' | 'drawing' | 'description' | 'album') || 'prompt'
   const roundDuration = typeof settings.round_duration === 'number' ? settings.round_duration : 45
   const roundDeadline = settings.round_deadline as string | undefined
   const chains = (settings.chains as Record<string, GarticPhoneChain>) || {}
-  const albumIdx = typeof settings.current_album_index === 'number' ? settings.current_album_index : 0
+  const [albumIdx, setAlbumIdx] = useState<number>(
+    typeof settings.current_album_index === 'number' ? settings.current_album_index : 0
+  )
+  const [slideStep, setSlideStep] = useState<number>(0)
+
+  // Keep albumIdx in sync when settings change
+  useEffect(() => {
+    if (typeof settings.current_album_index === 'number') {
+      setAlbumIdx(settings.current_album_index)
+    }
+  }, [settings.current_album_index])
 
   // Canonical participant order
   const participants = useMemo(() => {
@@ -167,10 +179,46 @@ export default function PlayerGarticPhoneView({
     })) as unknown as SessionParticipant[]
   }, [settings.participant_order, chains, session.id])
 
+  // Check if participant is spectating (joined after game started)
+  const isSpectator = useMemo(() => {
+    const order = (settings.participant_order as string[]) || []
+    return order.length > 0 && !order.includes(participant.id)
+  }, [settings.participant_order, participant.id])
+
   // Assigned task for this player
   const task = useMemo(() => {
     return getAssignedGarticTask(participant.id, participants, settings)
   }, [participant.id, participants, settings])
+
+  // Realtime broadcast listener for instant phase & album synchronization
+  useEffect(() => {
+    const channel = supabase
+      .channel(`gartic_phone_${session.id}`)
+      .on('broadcast', { event: 'phase_advanced' }, (payload) => {
+        if (payload.payload?.settings) {
+          setLocalSettings(payload.payload.settings)
+        }
+      })
+      .on('broadcast', { event: 'album_nav' }, (payload) => {
+        if (typeof payload.payload?.albumIndex === 'number') {
+          setAlbumIdx(payload.payload.albumIndex)
+          setSlideStep(0)
+        }
+      })
+      .on('broadcast', { event: 'album_step' }, (payload) => {
+        if (typeof payload.payload?.slideStep === 'number') {
+          setSlideStep(payload.payload.slideStep)
+        }
+        if (typeof payload.payload?.albumIndex === 'number') {
+          setAlbumIdx(payload.payload.albumIndex)
+        }
+      })
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [session.id, supabase])
 
   // Timer calculation
   const calculateTimeLeft = useCallback(() => {
@@ -500,8 +548,23 @@ export default function PlayerGarticPhoneView({
         )}
       </div>
 
+      {/* ── SPECTATOR VIEW (For late joiners) ── */}
+      {isSpectator && phase !== 'album' && (
+        <div className="flex-1 flex flex-col items-center justify-center p-6 text-center rounded-3xl bg-[#1d0e2e]/90 border border-pink-500/20 backdrop-blur-xl shadow-2xl my-2">
+          <Eye size={40} className="text-pink-400 mb-3 animate-pulse" />
+          <h3 className="text-lg font-black text-white mb-1">
+            {isRtl ? 'وضع المتفرج المباشر 🌸' : 'Live Spectator Mode 🌸'}
+          </h3>
+          <p className="text-xs text-pink-200/70 max-w-xs leading-relaxed">
+            {isRtl
+              ? 'لقد بدأت الجولة بالفعل قبل انضمامك. شاهد شاشة العرض الرئيسية وستشارك تلقائياً في الفعالية القادمة!'
+              : 'The round was already in progress when you joined. Watch the projector screen; you will be included in the next game!'}
+          </p>
+        </div>
+      )}
+
       {/* ── PHASE 1: WRITE INITIAL PROMPT ── */}
-      {phase === 'prompt' && (
+      {!isSpectator && phase === 'prompt' && (
         <div className="flex-1 flex flex-col justify-between gap-3 p-4 rounded-3xl bg-[#1d0e2e]/90 border border-pink-500/20 backdrop-blur-xl shadow-2xl my-2">
           <div>
             <div className="text-center mb-4">
@@ -580,7 +643,7 @@ export default function PlayerGarticPhoneView({
       )}
 
       {/* ── PHASE 2: DRAW THE PROMPT ── */}
-      {phase === 'drawing' && (
+      {!isSpectator && phase === 'drawing' && (
         <div className="flex-1 flex flex-col justify-between gap-2.5">
           {/* Target prompt banner */}
           <div className="p-3 rounded-2xl bg-gradient-to-r from-purple-500/25 via-pink-500/20 to-purple-500/25 border-2 border-pink-400/40 text-center shadow-lg">
@@ -747,7 +810,7 @@ export default function PlayerGarticPhoneView({
       )}
 
       {/* ── PHASE 3: DESCRIBE THE DRAWING ── */}
-      {phase === 'description' && (
+      {!isSpectator && phase === 'description' && (
         <div className="flex-1 flex flex-col justify-between gap-3 p-4 rounded-3xl bg-[#1d0e2e]/90 border border-pink-500/20 backdrop-blur-xl shadow-2xl my-2">
           <div>
             <div className="text-center mb-3">
@@ -840,29 +903,45 @@ export default function PlayerGarticPhoneView({
             {/* Quick Chain preview */}
             {activeChain && activeChain.turns.length > 0 && (
               <div className="space-y-2 p-3 rounded-2xl bg-black/40 border border-pink-500/20 text-start max-h-64 overflow-y-auto">
-                {activeChain.turns.map((turn, tIdx) => (
-                  <div key={tIdx} className="p-2 rounded-xl bg-white/5 border border-white/5 text-xs">
-                    <span className="font-bold text-pink-300 text-[11px] block">
-                      {turn.type === 'prompt'
-                        ? (isRtl ? `1. الفكرة الأصلية (${turn.nickname}):` : `1. Original Prompt (${turn.nickname}):`)
-                        : turn.type === 'drawing'
-                        ? (isRtl ? `2. الرسمة (${turn.nickname}):` : `2. Drawing (${turn.nickname}):`)
-                        : (isRtl ? `3. الوصف والتخمين (${turn.nickname}):` : `3. Description (${turn.nickname}):`)}
-                    </span>
-                    {turn.type === 'drawing' ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={turn.content}
-                        alt="Turn drawing"
-                        className="w-full h-32 object-contain rounded-lg mt-1 bg-black/60"
-                      />
-                    ) : (
-                      <p className="text-white text-xs mt-0.5 font-bold">
-                        &ldquo;{turn.content}&rdquo;
-                      </p>
-                    )}
-                  </div>
-                ))}
+                {activeChain.turns.map((turn, tIdx) => {
+                  const isVisible = tIdx <= slideStep
+                  return (
+                    <div
+                      key={tIdx}
+                      className={`p-2.5 rounded-xl border text-xs transition-all ${
+                        isVisible
+                          ? 'bg-white/10 border-pink-500/30 shadow-md'
+                          : 'bg-white/5 border-white/5 opacity-40'
+                      }`}
+                    >
+                      <span className="font-bold text-pink-300 text-[11px] block mb-1">
+                        {turn.type === 'prompt'
+                          ? (isRtl ? `1. الفكرة الأصلية (${turn.nickname}):` : `1. Original Prompt (${turn.nickname}):`)
+                          : turn.type === 'drawing'
+                          ? (isRtl ? `2. الرسمة (${turn.nickname}):` : `2. Drawing (${turn.nickname}):`)
+                          : (isRtl ? `3. الوصف والتخمين (${turn.nickname}):` : `3. Description (${turn.nickname}):`)}
+                      </span>
+                      {isVisible ? (
+                        turn.type === 'drawing' ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={turn.content}
+                            alt="Turn drawing"
+                            className="w-full h-36 object-contain rounded-lg mt-1 bg-black/60 border border-pink-500/20"
+                          />
+                        ) : (
+                          <p className="text-white text-xs mt-0.5 font-black">
+                            &ldquo;{turn.content}&rdquo;
+                          </p>
+                        )
+                      ) : (
+                        <div className="py-2 text-center text-[11px] text-pink-300/40 font-mono">
+                          🔒 {isRtl ? 'سيكشف الآن على شاشة العرض...' : 'Revealing on projector...'}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
               </div>
             )}
           </div>
