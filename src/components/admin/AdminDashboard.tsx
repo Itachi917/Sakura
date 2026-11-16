@@ -907,7 +907,7 @@ export default function AdminDashboard({ locale = 'en' }: AdminDashboardProps) {
     setAudioForm({
       title: 'Guess the anime from this theme song!',
       title_ar: 'خمّن الأنمي الشهير من هذا المقطع الصوتي!',
-      audio_url: 'https://upload.wikimedia.org/wikipedia/commons/4/4b/Japanese_classical_music_flute.ogg',
+      audio_url: '/audio/ost/conan.wav',
       answer: '',
       answer_ar: '',
       aliases: '',
