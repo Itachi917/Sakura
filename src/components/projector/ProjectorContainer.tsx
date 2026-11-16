@@ -33,6 +33,7 @@ import {
   getZoomQuestionsForSession,
   getSilhouetteQuestionsForSession,
   getEmojiRiddleQuestionsForSession,
+  getFeudRoundsForSession,
   prepareGameSwitchSettings,
   initGarticPhoneSettings,
   advanceGarticPhonePhase,
@@ -108,6 +109,8 @@ export default function ProjectorContainer({ sessionId, locale = 'en' }: Project
       setSilhouetteQuestions(getSilhouetteQuestionsForSession(settings))
     } else if (mode === 'emoji_riddle') {
       setEmojiQuestions(getEmojiRiddleQuestionsForSession(settings))
+    } else if (mode === 'sakura_feud') {
+      setFeudRounds(getFeudRoundsForSession(settings))
     } else if (['whos_that_character', 'spacetoon_nostalgia', 'anime_expert_exam'].includes(mode)) {
       setQuizQuestions(getQuizQuestionsForActivity(mode, settings))
     }
@@ -264,6 +267,19 @@ export default function ProjectorContainer({ sessionId, locale = 'en' }: Project
     ? 4
     : quizQuestions.length || 5
   const currentIdx = getQuestionIndex(session)
+
+  // Ensure revealed answers and round bank never bleed into the next question
+  useEffect(() => {
+    setFeudRoundState(prev => ({
+      ...prev,
+      revealedAnswerIndices: [],
+      strikes: 0,
+      roundBank: 0,
+      faceoff: null,
+      isSteal: false,
+      activeTeam: null,
+    }))
+  }, [currentIdx])
 
   // Host Action Dispatcher from Projector View
   const handleHostAction = async (newStatus: GameSession['status'], newQuestionIndex?: number) => {
@@ -455,13 +471,28 @@ export default function ProjectorContainer({ sessionId, locale = 'en' }: Project
             strikes: data.strikes,
             isSteal: data.strikes === 3,
           }))
-        } else if (type === 'reveal_answer') {
-          sound.playReveal()
+        } else if (type === 'round_reset') {
           setFeudRoundState(prev => ({
             ...prev,
-            revealedAnswerIndices: [...prev.revealedAnswerIndices, data.index],
-            roundBank: typeof data.newBank === 'number' ? data.newBank : prev.roundBank,
+            revealedAnswerIndices: [],
+            strikes: 0,
+            roundBank: 0,
+            faceoff: null,
+            isSteal: false,
+            activeTeam: null,
           }))
+        } else if (type === 'reveal_answer') {
+          sound.playReveal()
+          const currentRoundIdx = getQuestionIndex(session)
+          if (data.roundIndex === undefined || data.roundIndex === currentRoundIdx) {
+            setFeudRoundState(prev => ({
+              ...prev,
+              revealedAnswerIndices: prev.revealedAnswerIndices.includes(data.index)
+                ? prev.revealedAnswerIndices
+                : [...prev.revealedAnswerIndices, data.index],
+              roundBank: typeof data.newBank === 'number' ? data.newBank : prev.roundBank,
+            }))
+          }
         } else if (type === 'faceoff_start') {
           sound.playClick()
           setFeudRoundState(prev => ({

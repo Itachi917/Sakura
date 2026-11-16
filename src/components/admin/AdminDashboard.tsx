@@ -42,7 +42,7 @@ import type {
   Quiz,
   QuizQuestion,
 } from '@/types/database'
-import { generateNumericPin, shuffleArray, getDrawingWordsForSession, getQuizQuestionsForActivity } from '@/lib/gameHelpers'
+import { generateNumericPin, shuffleArray, getDrawingWordsForSession, getQuizQuestionsForActivity, getFeudRoundsForSession } from '@/lib/gameHelpers'
 import {
   ZOOM_GUESS_QUESTIONS,
   WHOS_THAT_CHARACTER_QUESTIONS,
@@ -52,6 +52,7 @@ import {
   SILHOUETTE_QUESTIONS,
   EMOJI_RIDDLE_QUESTIONS,
   DRAWING_WORDS,
+  SAKURA_FEUD_ROUNDS,
   ANIME_AUDIO_PRESETS,
   type ZoomGuessQuestionData,
   type QuizQuestionData,
@@ -59,6 +60,7 @@ import {
   type SilhouetteQuestionData,
   type EmojiRiddleData,
   type DrawingWordData,
+  type FeudQuestionData,
   type AudioPreset,
 } from '@/lib/gameData'
 import {
@@ -98,7 +100,7 @@ export default function AdminDashboard({ locale = 'en' }: AdminDashboardProps) {
   const isRtl = locale === 'ar'
 
   // Navigation tab
-  const [activeTab, setActiveTab] = useState<'sessions' | 'events' | 'stamps' | 'quizzes' | 'zoom_guess' | 'audio_guess' | 'silhouette_guess' | 'emoji_riddle' | 'draw_words'>('sessions')
+  const [activeTab, setActiveTab] = useState<'sessions' | 'events' | 'stamps' | 'quizzes' | 'zoom_guess' | 'audio_guess' | 'silhouette_guess' | 'emoji_riddle' | 'draw_words' | 'sakura_feud'>('sessions')
 
   // Global Admin State
   const [loading, setLoading] = useState(true)
@@ -348,6 +350,34 @@ export default function AdminDashboard({ locale = 'en' }: AdminDashboardProps) {
     total_time_seconds: 30,
   })
 
+  // 11. Sakura Feud Rounds State
+  const [feudRounds, setFeudRounds] = useState<FeudQuestionData[]>(() => {
+    return getFeudRoundsForSession()
+  })
+  const [showFeudModal, setShowFeudModal] = useState(false)
+  const [editingFeudId, setEditingFeudId] = useState<string | null>(null)
+  const [feudForm, setFeudForm] = useState<{
+    question: string
+    question_ar: string
+    answers: {
+      answer_text: string
+      answer_text_ar: string
+      points: number
+      sort_order: number
+    }[]
+  }>({
+    question: '',
+    question_ar: '',
+    answers: [
+      { answer_text: '', answer_text_ar: '', points: 35, sort_order: 1 },
+      { answer_text: '', answer_text_ar: '', points: 25, sort_order: 2 },
+      { answer_text: '', answer_text_ar: '', points: 15, sort_order: 3 },
+      { answer_text: '', answer_text_ar: '', points: 12, sort_order: 4 },
+      { answer_text: '', answer_text_ar: '', points: 8, sort_order: 5 },
+      { answer_text: '', answer_text_ar: '', points: 5, sort_order: 6 },
+    ],
+  })
+
   // Helper feedback timer
   const showFeedback = (text: string, type: 'success' | 'error' = 'success') => {
     setFeedbackMsg({ text, type })
@@ -523,6 +553,10 @@ export default function AdminDashboard({ locale = 'en' }: AdminDashboardProps) {
       if (selectedActivity === 'audio_guess') {
         settingsPayload.game_mode = 'audio_guess'
         settingsPayload.audio_questions = shuffleArray(audioQuestions)
+      }
+      if (selectedActivity === 'sakura_feud') {
+        settingsPayload.game_mode = 'sakura_feud'
+        settingsPayload.feud_rounds = shuffleArray(feudRounds)
       }
       if (['whos_that_character', 'spacetoon_nostalgia', 'anime_expert_exam'].includes(selectedActivity)) {
         settingsPayload.quiz_questions = shuffleArray(customQuestions[selectedActivity] || [])
@@ -1479,6 +1513,142 @@ export default function AdminDashboard({ locale = 'en' }: AdminDashboardProps) {
     showFeedback(isRtl ? 'تمت استعادة الكلمات الافتراضية' : 'Default drawing words restored')
   }
 
+  // --- Sakura Feud Handlers ---
+  const handleOpenAddFeud = () => {
+    sound.playClick()
+    setEditingFeudId(null)
+    setFeudForm({
+      question: '',
+      question_ar: '',
+      answers: [
+        { answer_text: '', answer_text_ar: '', points: 35, sort_order: 1 },
+        { answer_text: '', answer_text_ar: '', points: 25, sort_order: 2 },
+        { answer_text: '', answer_text_ar: '', points: 15, sort_order: 3 },
+        { answer_text: '', answer_text_ar: '', points: 12, sort_order: 4 },
+        { answer_text: '', answer_text_ar: '', points: 8, sort_order: 5 },
+        { answer_text: '', answer_text_ar: '', points: 5, sort_order: 6 },
+      ],
+    })
+    setShowFeudModal(true)
+  }
+
+  const handleOpenEditFeud = (round: FeudQuestionData) => {
+    sound.playClick()
+    setEditingFeudId(round.id)
+    setFeudForm({
+      question: round.question,
+      question_ar: round.question_ar,
+      answers: round.answers.map(a => ({ ...a })),
+    })
+    setShowFeudModal(true)
+  }
+
+  const handleSaveFeud = (e: React.FormEvent) => {
+    e.preventDefault()
+    sound.playClick()
+
+    if (!feudForm.question.trim() && !feudForm.question_ar.trim()) {
+      alert(isRtl ? 'يرجى كتابة نص السؤال' : 'Please enter the question text')
+      return
+    }
+
+    const cleanedAnswers = feudForm.answers.map((a, idx) => ({
+      answer_text: a.answer_text.trim(),
+      answer_text_ar: a.answer_text_ar.trim() || a.answer_text.trim(),
+      points: Number(a.points) || 0,
+      sort_order: idx + 1,
+    })).filter(a => a.answer_text || a.answer_text_ar)
+
+    if (cleanedAnswers.length === 0) {
+      alert(isRtl ? 'يرجى كتابة إجابة واحدة على الأقل' : 'Please add at least one answer')
+      return
+    }
+
+    let updated: FeudQuestionData[]
+    if (editingFeudId) {
+      updated = feudRounds.map(r => {
+        if (r.id === editingFeudId) {
+          return {
+            ...r,
+            question: feudForm.question.trim() || feudForm.question_ar.trim(),
+            question_ar: feudForm.question_ar.trim() || feudForm.question.trim(),
+            answers: cleanedAnswers,
+          }
+        }
+        return r
+      })
+    } else {
+      const newRound: FeudQuestionData = {
+        id: `feud-${Date.now()}`,
+        question: feudForm.question.trim() || feudForm.question_ar.trim(),
+        question_ar: feudForm.question_ar.trim() || feudForm.question.trim(),
+        answers: cleanedAnswers,
+      }
+      updated = [...feudRounds, newRound]
+    }
+
+    setFeudRounds(updated)
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('sakura_feud_rounds', JSON.stringify(updated))
+      } catch (e) {
+        console.warn('Failed to save feud rounds to localStorage:', e)
+      }
+    }
+
+    sound.playCorrect()
+    showFeedback(isRtl ? 'تم حفظ جولة الفيود بنجاح! ⚔️' : 'Feud round saved successfully! ⚔️')
+    setShowFeudModal(false)
+    setEditingFeudId(null)
+  }
+
+  const handleDeleteFeud = (id: string) => {
+    if (!confirm(isRtl ? 'حذف هذه الجولة نهائياً من بنك الفيود؟' : 'Delete this feud round permanently?')) return
+    sound.playClick()
+    const updated = feudRounds.filter(r => r.id !== id)
+    setFeudRounds(updated)
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('sakura_feud_rounds', JSON.stringify(updated))
+      } catch {}
+    }
+    showFeedback(isRtl ? 'تم حذف الجولة' : 'Feud round deleted')
+  }
+
+  const handleResetFeud = () => {
+    if (!confirm(isRtl ? 'استعادة جولات الفيود الافتراضية؟ ستفقد التعديلات المخصصة.' : 'Reset to default feud rounds?')) return
+    sound.playClick()
+    setFeudRounds(SAKURA_FEUD_ROUNDS)
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.removeItem('sakura_feud_rounds')
+      } catch {}
+    }
+    showFeedback(isRtl ? 'تمت استعادة جولات الفيود الافتراضية' : 'Default feud rounds restored')
+  }
+
+  const handleAddFeudAnswerRow = () => {
+    setFeudForm(prev => ({
+      ...prev,
+      answers: [
+        ...prev.answers,
+        {
+          answer_text: '',
+          answer_text_ar: '',
+          points: 5,
+          sort_order: prev.answers.length + 1,
+        },
+      ],
+    }))
+  }
+
+  const handleRemoveFeudAnswerRow = (index: number) => {
+    setFeudForm(prev => ({
+      ...prev,
+      answers: prev.answers.filter((_, idx) => idx !== index),
+    }))
+  }
+
   return (
     <div className="w-full space-y-8 animate-fade-in font-sans">
       {/* Toast Notification Alert */}
@@ -1525,6 +1695,7 @@ export default function AdminDashboard({ locale = 'en' }: AdminDashboardProps) {
       <div className="flex items-center gap-2 border-b border-pink-500/20 pb-2 overflow-x-auto scrollbar-none">
         {[
           { id: 'sessions', label: isRtl ? '🎮 الألعاب الحية' : '🎮 Live Games', count: sessions.length },
+          { id: 'sakura_feud', label: isRtl ? '⚔️ فيود ساكورا' : '⚔️ Sakura Feud', count: feudRounds.length },
           { id: 'zoom_guess', label: isRtl ? '🔍 زووم وتخمين' : '🔍 Zoom & Guess', count: zoomQuestions.length },
           { id: 'draw_words', label: isRtl ? '🎨 كلمات لعبة جارتك (Gartic)' : '🎨 Gartic & Draw Words', count: drawingWords.length },
           { id: 'emoji_riddle', label: isRtl ? '🎭 ألغاز الإيموجي' : '🎭 Emoji Riddles', count: emojiQuestions.length },
@@ -2592,6 +2763,125 @@ export default function AdminDashboard({ locale = 'en' }: AdminDashboardProps) {
                 </div>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================ */}
+      {/* TAB: SAKURA FEUD (FAMILY FEUD STYLE) */}
+      {/* ============================================================ */}
+      {activeTab === 'sakura_feud' && (
+        <div className="space-y-6 animate-fade-in">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div>
+              <h2 className="text-xl font-black text-white flex items-center gap-2">
+                <span>⚔️</span>
+                <span>{isRtl ? 'جولات صراع العائلات (فيود ساكورا)' : 'Sakura Feud Rounds & Survey Answers'}</span>
+              </h2>
+              <p className="text-xs text-pink-200/70 mt-1">
+                {isRtl
+                  ? 'بنك أسئلة وجولات صراع الفرق (ساكورا ضد الكاتانا). كل جولة تحتوي على إجابات استبيانية بنقاطها ومراتبها.'
+                  : 'Survey questions and ranked answers for team face-offs (Sakura vs Katanas). Top answers award banked points.'}
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleOpenAddFeud}
+                className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-pink-600 to-rose-600 hover:from-pink-500 text-white font-black text-xs sm:text-sm flex items-center gap-2 shadow-lg shadow-pink-500/25 active:scale-95 transition-all"
+              >
+                <Plus size={16} />
+                <span>{isRtl ? 'إضافة جولة جديدة' : 'Add New Round'}</span>
+              </button>
+
+              <button
+                onClick={handleResetFeud}
+                className="px-3.5 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-pink-300 font-bold text-xs sm:text-sm flex items-center gap-1.5 border border-pink-500/20 transition-colors"
+              >
+                <RefreshCw size={14} />
+                <span>{isRtl ? 'استعادة الافتراضي' : 'Reset Defaults'}</span>
+              </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {feudRounds.map((round, idx) => {
+              const totalPoints = round.answers.reduce((acc, a) => acc + (Number(a.points) || 0), 0)
+              return (
+                <div
+                  key={round.id || `feud-${idx}`}
+                  className="rounded-3xl bg-black/40 border-2 border-pink-500/20 backdrop-blur-xl p-5 flex flex-col justify-between hover:border-pink-400/40 transition-all shadow-xl space-y-4"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[11px] font-mono text-pink-400 font-bold bg-pink-500/10 px-2.5 py-1 rounded-full border border-pink-500/20">
+                        {isRtl ? `جولة #${idx + 1}` : `Round #${idx + 1}`}
+                      </span>
+                      <span className="text-[10px] text-pink-200/70 font-bold">
+                        {round.answers.length} {isRtl ? 'إجابات' : 'answers'}
+                      </span>
+                    </div>
+
+                    <span
+                      className={`text-[10px] font-black px-2.5 py-1 rounded-full border ${
+                        totalPoints === 100
+                          ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                          : 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                      }`}
+                    >
+                      {totalPoints} {isRtl ? 'نقطة' : 'pts'}
+                    </span>
+                  </div>
+
+                  <div>
+                    <h3 className="text-base font-black text-white leading-snug">
+                      {round.question_ar || round.question}
+                    </h3>
+                    {round.question && round.question !== round.question_ar && (
+                      <p className="text-xs text-pink-200/60 font-mono mt-1">{round.question}</p>
+                    )}
+                  </div>
+
+                  <div className="space-y-1.5 bg-black/30 p-3 rounded-2xl border border-white/5">
+                    {round.answers.map((ans, aIdx) => (
+                      <div
+                        key={aIdx}
+                        className="flex items-center justify-between gap-2 p-2 rounded-xl bg-white/5 hover:bg-white/10 text-xs transition-colors"
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="w-5 h-5 rounded-full bg-pink-500/20 text-pink-300 flex items-center justify-center text-[10px] font-bold shrink-0">
+                            {ans.sort_order || aIdx + 1}
+                          </span>
+                          <span className="font-bold text-pink-100 truncate">
+                            {ans.answer_text_ar || ans.answer_text}
+                          </span>
+                        </div>
+                        <span className="font-mono font-black text-amber-400 px-2 py-0.5 rounded-md bg-amber-400/10 shrink-0 text-[11px]">
+                          {ans.points}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="flex items-center justify-end gap-1.5 pt-2 border-t border-white/5">
+                    <button
+                      onClick={() => handleOpenEditFeud(round)}
+                      className="p-2 rounded-lg bg-white/5 hover:bg-white/10 text-pink-300 transition-colors"
+                      title={isRtl ? 'تعديل الجولة' : 'Edit Round'}
+                    >
+                      <Edit2 size={14} />
+                    </button>
+                    <button
+                      onClick={() => handleDeleteFeud(round.id)}
+                      className="p-2 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 transition-colors"
+                      title={isRtl ? 'حذف الجولة' : 'Delete Round'}
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                </div>
+              )
+            })}
           </div>
         </div>
       )}
@@ -3860,6 +4150,195 @@ export default function AdminDashboard({ locale = 'en' }: AdminDashboardProps) {
                   className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-500 text-white font-extrabold shadow-lg"
                 >
                   {isRtl ? 'حفظ المقطع الصوتي' : 'Save Audio Track'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================ */}
+      {/* MODAL: ADD/EDIT SAKURA FEUD ROUND */}
+      {/* ============================================================ */}
+      {showFeudModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md animate-fade-in overflow-y-auto">
+          <div className="w-full max-w-2xl bg-[#20102c] border-2 border-pink-500/30 rounded-3xl p-6 sm:p-8 shadow-2xl relative my-8 max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between pb-4 border-b border-pink-500/20">
+              <h3 className="text-xl font-black text-white flex items-center gap-2">
+                <span>⚔️</span>
+                <span>
+                  {editingFeudId
+                    ? (isRtl ? 'تعديل جولة صراع العائلات' : 'Edit Feud Round')
+                    : (isRtl ? 'إضافة جولة صراع جديدة' : 'Add New Feud Round')}
+                </span>
+              </h3>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowFeudModal(false)
+                  setEditingFeudId(null)
+                }}
+                className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 text-pink-200 flex items-center justify-center font-bold text-sm transition-colors"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveFeud} className="space-y-4 text-xs sm:text-sm mt-4 flex-1 overflow-y-auto pr-1">
+              <div>
+                <label className="block text-pink-200 font-bold mb-1">
+                  {isRtl ? 'سؤال الجولة بالعربية *' : 'Round Question (Arabic) *'}
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={feudForm.question_ar}
+                  onChange={e => setFeudForm({ ...feudForm, question_ar: e.target.value })}
+                  placeholder="مثال: سألنا 100 شخص: اذكر أقوى شخصية في ون بيس؟"
+                  className="w-full p-2.5 rounded-xl bg-black/50 border border-pink-400/30 text-white font-bold"
+                />
+              </div>
+
+              <div>
+                <label className="block text-pink-200 font-bold mb-1">
+                  {isRtl ? 'سؤال الجولة بالإنجليزية' : 'Round Question (English)'}
+                </label>
+                <input
+                  type="text"
+                  value={feudForm.question}
+                  onChange={e => setFeudForm({ ...feudForm, question: e.target.value })}
+                  placeholder="e.g. We asked 100 fans: Name the strongest One Piece character?"
+                  className="w-full p-2.5 rounded-xl bg-black/50 border border-pink-400/30 text-white"
+                />
+              </div>
+
+              <div className="pt-2">
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-pink-200 font-black">
+                    {isRtl ? 'الإجابات المصنفة والنقاط' : 'Ranked Answers & Points'}
+                  </label>
+                  {(() => {
+                    const totalPts = feudForm.answers.reduce((sum, a) => sum + (Number(a.points) || 0), 0)
+                    return (
+                      <span
+                        className={`text-xs font-mono font-bold px-3 py-1 rounded-full border ${
+                          totalPts === 100
+                            ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                            : 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                        }`}
+                      >
+                        {isRtl ? `المجموع: ${totalPts} / 100 نقطة` : `Total: ${totalPts} / 100 pts`}
+                      </span>
+                    )
+                  })()}
+                </div>
+
+                <div className="space-y-2.5">
+                  {feudForm.answers.map((ans, idx) => (
+                    <div
+                      key={idx}
+                      className="p-3 rounded-2xl bg-white/5 border border-pink-500/20 space-y-2"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-mono font-bold text-pink-400 flex items-center gap-1.5">
+                          <span className="w-5 h-5 rounded-full bg-pink-500/30 text-pink-200 flex items-center justify-center text-[10px]">
+                            {idx + 1}
+                          </span>
+                          {isRtl ? `المركز #${idx + 1}` : `Rank #${idx + 1}`}
+                        </span>
+
+                        {feudForm.answers.length > 2 && (
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveFeudAnswerRow(idx)}
+                            className="p-1 rounded-md text-rose-400 hover:bg-rose-500/20 transition-colors"
+                            title={isRtl ? 'حذف هذه الإجابة' : 'Remove Answer'}
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-5 gap-2">
+                        <div className="sm:col-span-2">
+                          <input
+                            type="text"
+                            required
+                            placeholder={isRtl ? 'نص الإجابة بالعربية *' : 'Arabic Answer *'}
+                            value={ans.answer_text_ar}
+                            onChange={e => {
+                              const next = [...feudForm.answers]
+                              next[idx] = { ...next[idx], answer_text_ar: e.target.value }
+                              setFeudForm({ ...feudForm, answers: next })
+                            }}
+                            className="w-full p-2 rounded-xl bg-black/50 border border-pink-400/30 text-white font-bold text-xs"
+                          />
+                        </div>
+
+                        <div className="sm:col-span-2">
+                          <input
+                            type="text"
+                            placeholder={isRtl ? 'نص الإجابة بالإنجليزية' : 'English Answer'}
+                            value={ans.answer_text}
+                            onChange={e => {
+                              const next = [...feudForm.answers]
+                              next[idx] = { ...next[idx], answer_text: e.target.value }
+                              setFeudForm({ ...feudForm, answers: next })
+                            }}
+                            className="w-full p-2 rounded-xl bg-black/50 border border-pink-400/30 text-white text-xs"
+                          />
+                        </div>
+
+                        <div className="sm:col-span-1">
+                          <div className="flex items-center gap-1">
+                            <input
+                              type="number"
+                              min="1"
+                              max="100"
+                              required
+                              placeholder="النقاط"
+                              value={ans.points}
+                              onChange={e => {
+                                const next = [...feudForm.answers]
+                                next[idx] = { ...next[idx], points: Number(e.target.value) || 0 }
+                                setFeudForm({ ...feudForm, answers: next })
+                              }}
+                              className="w-full p-2 rounded-xl bg-black/50 border border-pink-400/30 text-amber-300 font-black text-center text-xs"
+                            />
+                            <span className="text-[10px] text-pink-200/60 font-mono shrink-0">pts</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleAddFeudAnswerRow}
+                  className="mt-3 w-full py-2.5 rounded-xl border-2 border-dashed border-pink-500/30 hover:border-pink-500/60 bg-pink-500/5 hover:bg-pink-500/10 text-pink-300 text-xs font-bold flex items-center justify-center gap-1.5 transition-all"
+                >
+                  <Plus size={14} />
+                  <span>{isRtl ? 'إضافة إجابة إضافية لهذه الجولة' : 'Add Another Answer Row'}</span>
+                </button>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-4 border-t border-white/5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowFeudModal(false)
+                    setEditingFeudId(null)
+                  }}
+                  className="px-4 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-pink-200 font-bold"
+                >
+                  {isRtl ? 'إلغاء' : 'Cancel'}
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-pink-600 to-rose-600 hover:from-pink-500 text-white font-extrabold shadow-lg"
+                >
+                  {isRtl ? 'حفظ جولة الفيود' : 'Save Feud Round'}
                 </button>
               </div>
             </form>

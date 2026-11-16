@@ -116,7 +116,7 @@ export default function PlayerFeudView({
           if (typeof data.newBank === 'number') {
             setRoundBank(data.newBank)
           }
-        } else if (type === 'round_awarded') {
+        } else if (type === 'round_reset' || type === 'round_awarded') {
           setStrikes(0)
           setRoundBank(0)
           setFaceoff(null)

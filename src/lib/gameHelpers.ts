@@ -8,8 +8,10 @@ import {
   ZOOM_GUESS_QUESTIONS,
   SILHOUETTE_QUESTIONS,
   EMOJI_RIDDLE_QUESTIONS,
+  SAKURA_FEUD_ROUNDS,
   GARTIC_PHONE_PROMPTS,
   type QuizQuestionData,
+  type FeudQuestionData,
   type AudioGuessQuestionData,
   type ZoomGuessQuestionData,
   type SilhouetteQuestionData,
@@ -301,6 +303,34 @@ export function getEmojiRiddleQuestionsForSession(
 }
 
 /**
+ * Loads Sakura Feud rounds, checking session settings, localStorage, and defaults.
+ */
+export function getFeudRoundsForSession(
+  sessionSettings?: Record<string, unknown> | null
+): FeudQuestionData[] {
+  if (sessionSettings) {
+    const customRounds = sessionSettings.feud_rounds
+    if (Array.isArray(customRounds) && customRounds.length > 0) {
+      return customRounds as FeudQuestionData[]
+    }
+  }
+
+  if (typeof window !== 'undefined') {
+    try {
+      const saved = localStorage.getItem('sakura_feud_rounds')
+      if (saved) {
+        const parsed = JSON.parse(saved)
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed as FeudQuestionData[]
+        }
+      }
+    } catch {}
+  }
+
+  return SAKURA_FEUD_ROUNDS
+}
+
+/**
  * Loads Draw & Guess words, checking session settings, localStorage, and defaults.
  */
 export function getDrawingWordsForSession(
@@ -365,6 +395,8 @@ export function prepareGameSwitchSettings(
     baseSettings.current_album_index = 0
     baseSettings.chains = {}
     baseSettings.submissions = {}
+  } else if (targetActivity === 'sakura_feud') {
+    baseSettings.feud_rounds = shuffleArray(getFeudRoundsForSession(currentSettings))
   } else if (['whos_that_character', 'spacetoon_nostalgia', 'anime_expert_exam'].includes(targetActivity)) {
     baseSettings.quiz_questions = shuffleArray(getQuizQuestionsForActivity(targetActivity, currentSettings))
   }

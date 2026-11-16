@@ -35,6 +35,7 @@ import {
   getZoomQuestionsForSession,
   getSilhouetteQuestionsForSession,
   getEmojiRiddleQuestionsForSession,
+  getFeudRoundsForSession,
   prepareGameSwitchSettings,
   initGarticPhoneSettings,
   advanceGarticPhonePhase,
@@ -150,6 +151,8 @@ export default function HostControlRoom({ sessionId, locale = 'en' }: HostContro
           setSilhouetteQuestions(getSilhouetteQuestionsForSession(sess.settings as any))
         } else if (isEmojiGame) {
           setEmojiQuestions(getEmojiRiddleQuestionsForSession(sess.settings as any))
+        } else if (sess.activity_type === 'sakura_feud' || ((sess.settings as any)?.game_mode === 'sakura_feud')) {
+          setFeudRounds(getFeudRoundsForSession(sess.settings as any))
         } else if (['whos_that_character', 'spacetoon_nostalgia', 'anime_expert_exam'].includes(sess.activity_type)) {
           setQuizQuestions(getQuizQuestionsForActivity(sess.activity_type, sess.settings as any))
         }
@@ -404,7 +407,7 @@ export default function HostControlRoom({ sessionId, locale = 'en' }: HostContro
       event: 'feud_event',
       payload: {
         type: 'reveal_answer',
-        data: { index, points: addedPoints, newBank },
+        data: { roundIndex: currentIndex, index, points: addedPoints, newBank },
       },
     })
   }
@@ -503,6 +506,15 @@ export default function HostControlRoom({ sessionId, locale = 'en' }: HostContro
           setFaceoffActive(false)
           setBuzzerWinner(null)
           setActivePlayingTeam(null)
+
+          await supabase.channel(`projector_session_${sessionId}`).send({
+            type: 'broadcast',
+            event: 'feud_event',
+            payload: {
+              type: 'round_reset',
+              data: { questionIndex: newQuestionIndex },
+            },
+          })
         }
       }
     } catch (err: unknown) {
@@ -690,6 +702,16 @@ export default function HostControlRoom({ sessionId, locale = 'en' }: HostContro
 
   const currentQuizQ = quizQuestions[currentIndex]
   const currentFeudQ = feudRounds[currentIndex]
+
+  // Ensure host state is always cleanly reset when navigating between rounds
+  useEffect(() => {
+    setRevealedAnswers([])
+    setStrikes(0)
+    setRoundBank(0)
+    setFaceoffActive(false)
+    setBuzzerWinner(null)
+    setActivePlayingTeam(null)
+  }, [currentIndex])
   const currentZoomQ = isZoomGame ? (zoomQuestions[currentIndex] || zoomQuestions[0]) : null
   const currentAudioQ = isAudioGame ? (audioQuestions[currentIndex] || audioQuestions[0]) : null
   const currentSilhouetteQ = isSilhouetteGame ? (silhouetteQuestions[currentIndex] || silhouetteQuestions[0]) : null
