@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import {
   Play,
@@ -121,6 +121,25 @@ export default function HostControlRoom({ sessionId, locale = 'en' }: HostContro
     slowerName?: string
   } | null>(null)
 
+  const currentIndex = session ? getQuestionIndex(session) : 0
+  const buzzerLockedRef = useRef<{ locked: boolean; winnerId: string; lockedUntil: number }>({
+    locked: false,
+    winnerId: '',
+    lockedUntil: 0,
+  })
+
+  // Ensure host state is always cleanly reset when navigating between rounds
+  useEffect(() => {
+    if (!session) return
+    setRevealedAnswers([])
+    setStrikes(0)
+    setRoundBank(0)
+    setFaceoffActive(false)
+    setBuzzerWinner(null)
+    setActivePlayingTeam(null)
+    buzzerLockedRef.current = { locked: false, winnerId: '', lockedUntil: 0 }
+  }, [currentIndex, session?.id])
+
   // Load Session
   useEffect(() => {
     async function fetchSession() {
@@ -233,48 +252,63 @@ export default function HostControlRoom({ sessionId, locale = 'en' }: HostContro
             [data.participantId]: data.team,
           }))
         } else if (type === 'buzzer_press') {
-          // Buzzer pressed during Face-Off
-          setBuzzerWinner(prev => {
-            if (prev) return prev // already have a winner for this faceoff!
+          const now = Date.now()
+          // Strict lock: if already locked within the lockout duration, ignore late presses!
+          if (buzzerLockedRef.current.locked && now < buzzerLockedRef.current.lockedUntil) {
+            return
+          }
 
-            const winnerId = data.participantId
-            const winnerNick = data.nickname
-            const winnerTeam = data.team as 1 | 2
+          const winnerId = data.participantId
+          const winnerNick = data.nickname
+          const winnerTeam = (data.team as 1 | 2) || (participantTeams[winnerId] === 'team2' ? 2 : 1)
+          const winnerAvatar = data.avatar || '🌸'
 
-            // Determine slower contestant
-            const rep1 = participants.find(p => p.id === selectedRep1Id)
-            const rep2 = participants.find(p => p.id === selectedRep2Id)
-            const slower = winnerId === selectedRep1Id ? rep2 : rep1
+          // Synchronously lock immediately for 8 seconds
+          buzzerLockedRef.current = {
+            locked: true,
+            winnerId,
+            lockedUntil: now + 8000,
+          }
 
-            const slowerId = slower?.id
-            const slowerName = slower?.nickname
+          // Determine slower contestant
+          const rep1 = participants.find(p => p.id === selectedRep1Id)
+          const rep2 = participants.find(p => p.id === selectedRep2Id)
+          const slower = winnerId === selectedRep1Id ? rep2 : rep1
 
-            sound.playFanfare()
+          const slowerId = slower?.id
+          const slowerName = slower?.nickname
 
-            // Broadcast buzzer_result immediately so slower contestant screen shows "Not fast enough! ⏱️"
-            supabase.channel(`projector_session_${sessionId}`).send({
-              type: 'broadcast',
-              event: 'feud_event',
-              payload: {
-                type: 'buzzer_result',
-                data: {
-                  winnerId,
-                  winnerName: winnerNick,
-                  winnerTeam,
-                  slowerId,
-                  slowerName,
-                },
-              },
-            })
+          sound.playFanfare()
 
-            return {
-              participantId: winnerId,
-              nickname: winnerNick,
-              team: winnerTeam,
-              slowerId,
-              slowerName,
-            }
+          setBuzzerWinner({
+            participantId: winnerId,
+            nickname: winnerNick,
+            team: winnerTeam,
+            slowerId,
+            slowerName,
           })
+
+          // Broadcast buzzer_result immediately so projector and player devices lock and show alert
+          channel.send({
+            type: 'broadcast',
+            event: 'feud_event',
+            payload: {
+              type: 'buzzer_result',
+              data: {
+                winnerId,
+                winnerName: winnerNick,
+                winnerAvatar,
+                winnerTeam,
+                slowerId,
+                slowerName,
+                lockedAt: now,
+                lockDurationMs: 8000,
+              },
+            },
+          })
+        } else if (type === 'buzzer_reset') {
+          buzzerLockedRef.current = { locked: false, winnerId: '', lockedUntil: 0 }
+          setBuzzerWinner(null)
         }
       })
       .subscribe()
@@ -323,6 +357,7 @@ export default function HostControlRoom({ sessionId, locale = 'en' }: HostContro
   // Launch Face-Off Duel
   const handleLaunchFaceOff = async () => {
     sound.playClick()
+    buzzerLockedRef.current = { locked: false, winnerId: '', lockedUntil: 0 }
     setFaceoffActive(true)
     setBuzzerWinner(null)
 
@@ -339,8 +374,24 @@ export default function HostControlRoom({ sessionId, locale = 'en' }: HostContro
           rep1Name: rep1?.nickname || 'Player 1',
           rep2Id: selectedRep2Id,
           rep2Name: rep2?.nickname || 'Player 2',
-          roundIndex: getQuestionIndex(session),
+          roundIndex: session ? getQuestionIndex(session) : 0,
         },
+      },
+    })
+  }
+
+  // Reset Face-Off / Buzzer Duel
+  const handleResetFaceoff = async () => {
+    sound.playClick()
+    buzzerLockedRef.current = { locked: false, winnerId: '', lockedUntil: 0 }
+    setBuzzerWinner(null)
+
+    await supabase.channel(`projector_session_${sessionId}`).send({
+      type: 'broadcast',
+      event: 'feud_event',
+      payload: {
+        type: 'buzzer_reset',
+        data: {},
       },
     })
   }
@@ -671,7 +722,7 @@ export default function HostControlRoom({ sessionId, locale = 'en' }: HostContro
     }
   }
 
-  if (loading || !session) {
+  if (loading) {
     return (
       <div className="min-h-screen bg-[var(--midnight-plum)] text-white flex items-center justify-center">
         <Loader2 className="w-10 h-10 animate-spin text-pink-400" />
@@ -679,7 +730,26 @@ export default function HostControlRoom({ sessionId, locale = 'en' }: HostContro
     )
   }
 
-  const currentIndex = getQuestionIndex(session)
+  if (error || !session) {
+    return (
+      <div className="min-h-screen bg-[var(--midnight-plum)] text-white flex flex-col items-center justify-center gap-4 p-6 text-center">
+        <AlertTriangle className="w-12 h-12 text-rose-400" />
+        <h2 className="text-xl font-bold text-white">
+          {error || (isRtl ? 'لم يتم العثور على الجلسة' : 'Session not found.')}
+        </h2>
+        <p className="text-xs text-pink-200/60 max-w-sm">
+          {isRtl ? 'تأكد من رقم الجلسة وصلاحيات الإشراف في النظام' : 'Please verify the session code and administrative permissions.'}
+        </p>
+        <Link
+          href="/admin"
+          className="px-4 py-2 rounded-xl bg-pink-600 hover:bg-pink-500 text-white font-bold text-sm transition-all"
+        >
+          ← {isRtl ? 'العودة للوحة الإدارة' : 'Return to Admin Hub'}
+        </Link>
+      </div>
+    )
+  }
+
   const activeMode = (((session.settings as Record<string, unknown>)?.game_mode as string) || session.activity_type) || 'whos_that_character'
   const isZoomGame = activeMode === 'zoom_guess'
   const isAudioGame = activeMode === 'audio_guess'
@@ -702,16 +772,6 @@ export default function HostControlRoom({ sessionId, locale = 'en' }: HostContro
 
   const currentQuizQ = quizQuestions[currentIndex]
   const currentFeudQ = feudRounds[currentIndex]
-
-  // Ensure host state is always cleanly reset when navigating between rounds
-  useEffect(() => {
-    setRevealedAnswers([])
-    setStrikes(0)
-    setRoundBank(0)
-    setFaceoffActive(false)
-    setBuzzerWinner(null)
-    setActivePlayingTeam(null)
-  }, [currentIndex])
   const currentZoomQ = isZoomGame ? (zoomQuestions[currentIndex] || zoomQuestions[0]) : null
   const currentAudioQ = isAudioGame ? (audioQuestions[currentIndex] || audioQuestions[0]) : null
   const currentSilhouetteQ = isSilhouetteGame ? (silhouetteQuestions[currentIndex] || silhouetteQuestions[0]) : null
@@ -1018,27 +1078,44 @@ export default function HostControlRoom({ sessionId, locale = 'en' }: HostContro
 
                 {/* Live Buzzer Result Display */}
                 {buzzerWinner && (
-                  <div className="p-3 rounded-xl bg-yellow-950/60 border-2 border-yellow-400/50 flex flex-col sm:flex-row items-center justify-between gap-2 animate-scale-in">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xl">⚡</span>
+                  <div className="p-4 rounded-xl bg-gradient-to-r from-yellow-950/80 via-amber-950/60 to-yellow-950/80 border-2 border-yellow-400 flex flex-col sm:flex-row items-center justify-between gap-3 animate-scale-in">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-yellow-400/20 border border-yellow-400/50 flex items-center justify-center text-yellow-300 font-black">
+                        <Zap size={22} className="animate-bounce" />
+                      </div>
                       <div>
-                        <span className="text-[10px] uppercase font-black text-yellow-300 block">
-                          {isRtl ? 'الأسرع في الضغط على الزر:' : 'FIRST TO BUZZ IN:'}
-                        </span>
-                        <span className="text-sm font-black text-white">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] uppercase font-black tracking-wider text-yellow-300">
+                            {isRtl ? 'الأسرع في الضغط على الزر ⚡' : 'FIRST TO BUZZ IN ⚡'}
+                          </span>
+                          <span className="text-[9px] px-2 py-0.5 rounded-full bg-yellow-400/20 text-yellow-200 border border-yellow-400/40 font-mono font-bold">
+                            🔒 {isRtl ? 'مقفل ومحمي' : 'Locked'}
+                          </span>
+                        </div>
+                        <span className="text-base font-black text-white">
                           {buzzerWinner.nickname}{' '}
-                          <span className="text-xs text-yellow-300">
-                            ({buzzerWinner.team === 1 ? 'Team Sakura 🌸' : 'Team Katanas ⚔️'})
+                          <span className="text-xs font-bold text-yellow-300">
+                            ({buzzerWinner.team === 1 ? (isRtl ? 'فريق ساكورا 🌸' : 'Team Sakura 🌸') : (isRtl ? 'فريق الكاتانا ⚔️' : 'Team Katanas ⚔️')})
                           </span>
                         </span>
                       </div>
                     </div>
 
-                    {buzzerWinner.slowerName && (
-                      <div className="text-end text-xs text-red-300">
-                        <span className="font-bold">⏱️ Slower:</span> {buzzerWinner.slowerName} (Told &quot;Not fast enough!&quot;)
-                      </div>
-                    )}
+                    <div className="flex items-center gap-2">
+                      {buzzerWinner.slowerName && (
+                        <div className="text-end text-xs text-red-300 bg-red-950/40 px-3 py-1.5 rounded-lg border border-red-500/30">
+                          <span className="font-bold">⏱️ {isRtl ? 'الخصم أبطأ:' : 'Slower:'}</span> {buzzerWinner.slowerName}
+                        </div>
+                      )}
+                      <button
+                        onClick={handleResetFaceoff}
+                        className="px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-pink-200 text-xs font-bold border border-white/20 transition-all flex items-center gap-1 active:scale-95"
+                        title={isRtl ? 'إعادة ضبط الزر' : 'Reset Buzzer'}
+                      >
+                        <RotateCcw size={13} />
+                        <span>{isRtl ? 'إعادة تعيين الزر' : 'Reset Buzzer'}</span>
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>

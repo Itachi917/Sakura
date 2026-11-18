@@ -222,6 +222,13 @@ export default function ProjectorContainer({ sessionId, locale = 'en' }: Project
     participantTeams: {},
   })
 
+  // Synchronous lock for buzzer first-press detection to eliminate race conditions
+  const buzzerLockedRef = useRef<{ locked: boolean; winnerId: string; lockedUntil: number }>({
+    locked: false,
+    winnerId: '',
+    lockedUntil: 0,
+  })
+
   // Fullscreen toggle handler
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
@@ -270,6 +277,7 @@ export default function ProjectorContainer({ sessionId, locale = 'en' }: Project
 
   // Ensure revealed answers and round bank never bleed into the next question
   useEffect(() => {
+    buzzerLockedRef.current = { locked: false, winnerId: '', lockedUntil: 0 }
     setFeudRoundState(prev => ({
       ...prev,
       revealedAnswerIndices: [],
@@ -472,6 +480,7 @@ export default function ProjectorContainer({ sessionId, locale = 'en' }: Project
             isSteal: data.strikes === 3,
           }))
         } else if (type === 'round_reset') {
+          buzzerLockedRef.current = { locked: false, winnerId: '', lockedUntil: 0 }
           setFeudRoundState(prev => ({
             ...prev,
             revealedAnswerIndices: [],
@@ -495,6 +504,7 @@ export default function ProjectorContainer({ sessionId, locale = 'en' }: Project
           }
         } else if (type === 'faceoff_start') {
           sound.playClick()
+          buzzerLockedRef.current = { locked: false, winnerId: '', lockedUntil: 0 }
           setFeudRoundState(prev => ({
             ...prev,
             faceoff: data,
@@ -502,11 +512,76 @@ export default function ProjectorContainer({ sessionId, locale = 'en' }: Project
             revealedAnswerIndices: [],
             isSteal: false,
           }))
-        } else if (type === 'buzzer_result') {
+        } else if (type === 'buzzer_press') {
+          const now = Date.now()
+          // Drop second buzzes from other team within lock window
+          if (buzzerLockedRef.current.locked && now < buzzerLockedRef.current.lockedUntil) {
+            return
+          }
+          buzzerLockedRef.current = {
+            locked: true,
+            winnerId: data.participantId,
+            lockedUntil: now + 8000,
+          }
           sound.playFanfare()
+          sound.playBuzzer()
+          const pTeam = (data.team as 1 | 2) || (feudRoundState.participantTeams[data.participantId] === 'team2' ? 2 : 1)
           setFeudRoundState(prev => ({
             ...prev,
-            faceoff: prev.faceoff ? { ...prev.faceoff, ...data } : data,
+            faceoff: {
+              ...(prev.faceoff || {
+                rep1Id: '',
+                rep1Name: '',
+                rep2Id: '',
+                rep2Name: '',
+              }),
+              winnerId: data.participantId,
+              winnerName: data.nickname,
+              winnerAvatar: data.avatar,
+              winnerTeam: pTeam,
+              lockedAt: now,
+              lockDurationMs: 8000,
+            },
+          }))
+        } else if (type === 'buzzer_result') {
+          const now = Date.now()
+          if (!buzzerLockedRef.current.locked || buzzerLockedRef.current.winnerId === data.winnerId || now >= buzzerLockedRef.current.lockedUntil) {
+            buzzerLockedRef.current = {
+              locked: true,
+              winnerId: data.winnerId,
+              lockedUntil: now + (data.lockDurationMs || 8000),
+            }
+            sound.playFanfare()
+            setFeudRoundState(prev => ({
+              ...prev,
+              faceoff: {
+                ...(prev.faceoff || {
+                  rep1Id: '',
+                  rep1Name: '',
+                  rep2Id: '',
+                  rep2Name: '',
+                }),
+                ...data,
+                lockedAt: data.lockedAt || now,
+                lockDurationMs: data.lockDurationMs || 8000,
+              },
+            }))
+          }
+        } else if (type === 'buzzer_reset') {
+          buzzerLockedRef.current = { locked: false, winnerId: '', lockedUntil: 0 }
+          setFeudRoundState(prev => ({
+            ...prev,
+            faceoff: prev.faceoff ? {
+              ...prev.faceoff,
+              winnerId: undefined,
+              winnerName: undefined,
+              winnerAvatar: undefined,
+              winnerTeam: undefined,
+              slowerId: undefined,
+              slowerName: undefined,
+              lockedAt: undefined,
+              lockDurationMs: undefined,
+            } : null,
           }))
         } else if (type === 'set_active_team') {
           sound.playClick()
@@ -516,6 +591,7 @@ export default function ProjectorContainer({ sessionId, locale = 'en' }: Project
           }))
         } else if (type === 'round_awarded') {
           sound.playFanfare()
+          buzzerLockedRef.current = { locked: false, winnerId: '', lockedUntil: 0 }
           setFeudRoundState(prev => ({
             ...prev,
             team1Score: data.team1Score,

@@ -1,5 +1,6 @@
 'use client'
 
+import { useState, useEffect } from 'react'
 import { Swords, X, Trophy, Zap, Clock, ShieldAlert, Users } from 'lucide-react'
 import type { GameSession, SessionParticipant } from '@/types/database'
 import type { FeudQuestionData } from '@/lib/gameData'
@@ -23,9 +24,12 @@ interface ProjectorFeudProps {
       rep2Name: string
       winnerId?: string
       winnerName?: string
+      winnerAvatar?: string
       winnerTeam?: 1 | 2
       slowerId?: string
       slowerName?: string
+      lockedAt?: number
+      lockDurationMs?: number
     } | null
     isSteal?: boolean
     participantTeams?: Record<string, 'team1' | 'team2'>
@@ -43,6 +47,28 @@ export default function ProjectorFeud({
   const isRtl = locale === 'ar'
   const roundIndex = getQuestionIndex(session)
   const currentRound = rounds[roundIndex] || rounds[0]
+
+  // Countdown timer for buzzer lock window
+  const [lockTimeRemaining, setLockTimeRemaining] = useState<number>(0)
+
+  useEffect(() => {
+    if (!roundState.faceoff?.winnerName || !roundState.faceoff?.lockedAt) {
+      setLockTimeRemaining(0)
+      return
+    }
+
+    const duration = roundState.faceoff.lockDurationMs || 8000
+    const expiresAt = roundState.faceoff.lockedAt + duration
+
+    const updateTimer = () => {
+      const remainingMs = Math.max(0, expiresAt - Date.now())
+      setLockTimeRemaining(Math.ceil(remainingMs / 1000))
+    }
+
+    updateTimer()
+    const interval = setInterval(updateTimer, 250)
+    return () => clearInterval(interval)
+  }, [roundState.faceoff?.winnerName, roundState.faceoff?.lockedAt, roundState.faceoff?.lockDurationMs])
 
   const calculatedBank = currentRound?.answers
     .filter((_, idx) => roundState.revealedAnswerIndices.includes(idx))
@@ -138,54 +164,99 @@ export default function ProjectorFeud({
       </div>
 
       {/* ============================================================
-          FACEOFF & BUZZER WINNER LIVE STAGE BANNER
+          FACEOFF & BUZZER WINNER LIVE STAGE BANNER WITH LOCKOUT ALERT
           ============================================================ */}
       {roundState.faceoff && (
-        <div className="w-full rounded-2xl p-4 bg-gradient-to-r from-pink-950/60 via-purple-950/50 to-pink-950/60 border-2 border-pink-400/40 shadow-xl text-center animate-fade-in">
+        <div className="w-full rounded-3xl p-5 bg-gradient-to-r from-pink-950/80 via-purple-950/70 to-pink-950/80 border-2 border-pink-400/50 shadow-2xl text-center animate-fade-in relative overflow-hidden">
           {roundState.faceoff.winnerName ? (
-            /* BUZZER WINNER + SLOWER CONTESTANT */
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-2">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-yellow-400/20 border border-yellow-400/50 flex items-center justify-center text-yellow-300 font-black">
-                  <Zap size={22} className="animate-bounce" />
-                </div>
-                <div className="text-start">
-                  <div className="text-[10px] uppercase font-black tracking-widest text-yellow-300">
-                    {isRtl ? 'الأسرع في الضغط على الزر ⚡' : 'FIRST TO BUZZ IN ⚡'}
-                  </div>
-                  <div className="text-lg sm:text-xl font-black text-white">
-                    {roundState.faceoff.winnerName}{' '}
-                    <span className="text-sm font-bold text-pink-300">
-                      ({roundState.faceoff.winnerTeam === 1 ? (isRtl ? 'فريق ساكورا 🌸' : 'Team Sakura 🌸') : (isRtl ? 'فريق الكاتانا ⚔️' : 'Team Katanas ⚔️')})
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {roundState.faceoff.slowerName && (
-                <div className="px-4 py-2 rounded-xl bg-red-950/50 border border-red-500/30 text-end">
-                  <div className="text-[10px] uppercase font-bold text-red-300">
-                    {isRtl ? 'لست سريعاً بما فيه الكفاية ⏱️' : 'Not fast enough! ⏱️'}
-                  </div>
-                  <div className="text-sm font-bold text-red-200">
-                    {roundState.faceoff.slowerName}
-                  </div>
+            /* BUZZER WINNER ALERT STAGE */
+            <div className="space-y-4">
+              {/* Lock Progress Indicator Bar */}
+              {lockTimeRemaining > 0 && (
+                <div className="absolute top-0 left-0 right-0 h-1.5 bg-black/40 overflow-hidden">
+                  <div
+                    className="h-full bg-gradient-to-r from-yellow-400 via-amber-300 to-yellow-400 transition-all duration-300"
+                    style={{
+                      width: `${Math.min(100, Math.max(0, (lockTimeRemaining / ((roundState.faceoff.lockDurationMs || 8000) / 1000)) * 100))}%`,
+                    }}
+                  />
                 </div>
               )}
+
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-2 pt-1">
+                <div className="flex items-center gap-4">
+                  <div
+                    className={`w-16 h-16 rounded-2xl flex items-center justify-center text-3xl font-black shadow-xl ring-2 ${
+                      roundState.faceoff.winnerTeam === 1
+                        ? 'bg-pink-600/40 border-2 border-pink-400 text-pink-300 ring-pink-400/50 shadow-pink-500/40 animate-bounce'
+                        : 'bg-purple-600/40 border-2 border-purple-400 text-purple-300 ring-purple-400/50 shadow-purple-500/40 animate-bounce'
+                    }`}
+                  >
+                    {roundState.faceoff.winnerAvatar || (roundState.faceoff.winnerTeam === 1 ? '🌸' : '⚔️')}
+                  </div>
+
+                  <div className="text-start">
+                    <div className="flex items-center gap-2 mb-1 flex-wrap">
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-yellow-400/20 border border-yellow-400/50 text-yellow-300 text-[10px] sm:text-xs font-black uppercase tracking-wider animate-pulse">
+                        <Zap size={14} className="fill-yellow-300" />
+                        <span>{isRtl ? 'الأسرع في الضغط على الزر!' : 'FIRST TO BUZZ IN!'}</span>
+                      </span>
+
+                      {lockTimeRemaining > 0 && (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 text-[10px] font-mono font-bold">
+                          <span>🔒</span>
+                          <span>
+                            {isRtl
+                              ? `قفل الحماية: ${lockTimeRemaining} ثوانٍ (لا يمكن التخطي)`
+                              : `Protected: ${lockTimeRemaining}s (No overrides)`}
+                          </span>
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="text-2xl sm:text-3xl font-black text-white flex items-center gap-2 flex-wrap">
+                      <span>{roundState.faceoff.winnerName}</span>
+                      <span
+                        className={`text-sm sm:text-base font-bold px-3 py-0.5 rounded-full border ${
+                          roundState.faceoff.winnerTeam === 1
+                            ? 'bg-pink-500/20 text-pink-300 border-pink-400/40'
+                            : 'bg-purple-500/20 text-purple-300 border-purple-400/40'
+                        }`}
+                      >
+                        {roundState.faceoff.winnerTeam === 1
+                          ? (isRtl ? 'فريق ساكورا 🌸' : 'Team Sakura 🌸')
+                          : (isRtl ? 'فريق الكاتانا ⚔️' : 'Team Katanas ⚔️')}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {roundState.faceoff.slowerName && (
+                  <div className="px-4 py-2.5 rounded-2xl bg-red-950/60 border border-red-500/40 text-end shadow-lg">
+                    <div className="text-[10px] uppercase font-black text-red-400 flex items-center justify-end gap-1">
+                      <Clock size={12} />
+                      <span>{isRtl ? 'لست سريعاً بما فيه الكفاية ⏱️' : 'Not fast enough! ⏱️'}</span>
+                    </div>
+                    <div className="text-sm font-black text-red-200 mt-0.5">
+                      {roundState.faceoff.slowerName}
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           ) : (
             /* FACEOFF DUEL READY */
-            <div className="flex items-center justify-center gap-6">
+            <div className="flex items-center justify-center gap-6 py-1">
               <div className="text-end">
                 <span className="text-xs uppercase text-pink-300 font-bold block">🌸 Team Sakura Rep</span>
-                <span className="text-lg font-black text-white">{roundState.faceoff.rep1Name}</span>
+                <span className="text-xl font-black text-white">{roundState.faceoff.rep1Name}</span>
               </div>
-              <div className="w-10 h-10 rounded-full bg-pink-500/20 border border-pink-400/40 flex items-center justify-center font-black text-pink-200">
+              <div className="w-12 h-12 rounded-full bg-gradient-to-tr from-pink-600 to-purple-600 border-2 border-white/40 flex items-center justify-center font-black text-white text-sm shadow-lg shadow-pink-500/30 animate-pulse">
                 VS
               </div>
               <div className="text-start">
                 <span className="text-xs uppercase text-purple-300 font-bold block">⚔️ Team Katana Rep</span>
-                <span className="text-lg font-black text-white">{roundState.faceoff.rep2Name}</span>
+                <span className="text-xl font-black text-white">{roundState.faceoff.rep2Name}</span>
               </div>
             </div>
           )}

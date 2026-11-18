@@ -76,25 +76,57 @@ export default function PlayerFeudView({
           setBuzzed(false)
           setNotFastEnough(false)
           setIWonBuzzer(false)
+        } else if (type === 'buzzer_press') {
+          // Immediate first-press lock notification
+          if (data.participantId === participant.id) {
+            setIWonBuzzer(true)
+            setNotFastEnough(false)
+            setBuzzed(true)
+            sound.playFanfare()
+            setFaceoff(prev => ({
+              ...(prev || { rep1Id: '', rep1Name: '', rep2Id: '', rep2Name: '' }),
+              winnerId: participant.id,
+              winnerName: participant.nickname,
+              winnerTeam: myTeam === 'team1' ? 1 : 2,
+            }))
+          } else {
+            setNotFastEnough(true)
+            setIWonBuzzer(false)
+            setBuzzed(true)
+            sound.playBuzzer()
+            setFaceoff(prev => ({
+              ...(prev || { rep1Id: '', rep1Name: '', rep2Id: '', rep2Name: '' }),
+              winnerId: data.participantId,
+              winnerName: data.nickname,
+              winnerTeam: data.team,
+            }))
+          }
         } else if (type === 'buzzer_result') {
-          setFaceoff(prev => prev ? {
-            ...prev,
+          setFaceoff(prev => ({
+            ...(prev || { rep1Id: '', rep1Name: '', rep2Id: '', rep2Name: '' }),
             winnerId: data.winnerId,
             winnerName: data.winnerName,
             winnerTeam: data.winnerTeam,
             slowerId: data.slowerId,
             slowerName: data.slowerName,
-          } : null)
+          }))
 
-          if (data.slowerId === participant.id) {
-            setNotFastEnough(true)
-            setIWonBuzzer(false)
-            sound.playBuzzer()
-          } else if (data.winnerId === participant.id) {
+          if (data.winnerId === participant.id) {
             setIWonBuzzer(true)
             setNotFastEnough(false)
+            setBuzzed(true)
             sound.playFanfare()
+          } else {
+            setNotFastEnough(true)
+            setIWonBuzzer(false)
+            setBuzzed(true)
+            sound.playBuzzer()
           }
+        } else if (type === 'buzzer_reset') {
+          setFaceoff(null)
+          setBuzzed(false)
+          setNotFastEnough(false)
+          setIWonBuzzer(false)
         } else if (type === 'host_move_team') {
           if (data.participantId === participant.id) {
             setMyTeam(data.team)
